@@ -1,0 +1,12 @@
+{
+  "name": "Harbor Breeze Fan",
+  "short_name": "Fan",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f1419",
+  "background_color": "#0f1419",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }
+  ]
+}

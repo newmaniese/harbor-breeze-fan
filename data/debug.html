@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1419">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Debug — Harbor Breeze Fan</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="app.css?v=2">
+</head>
+<body class="page-debug">
+  <div class="app">
+    <header class="header">
+      <h1>Debug</h1>
+      <nav class="nav-links">
+        <a href="/">Controls</a>
+        <a href="/settings">Settings</a>
+        <a href="/debug">Debug</a>
+      </nav>
+    </header>
+
+    <main class="main">
+      <section class="panel panel-debug">
+        <h2>Verify TX (receiver must be connected)</h2>
+        <div class="debug-row">
+          <label for="verify-cmd">Command</label>
+          <select id="verify-cmd" class="debug-select"></select>
+          <button type="button" id="btn-verify-tx" class="btn btn-secondary">Verify TX</button>
+        </div>
+        <div id="verify-tx-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>Compare with physical remote (light)</h2>
+        <p class="debug-hint">1) Point the fan’s remote at the receiver. 2) Press <strong>Light On/Off</strong> once. 3) Click below.</p>
+        <button type="button" id="btn-compare-remote" class="btn btn-primary">Capture remote &amp; compare (light_toggle)</button>
+        <div id="compare-remote-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>Figure out Hub codes</h2>
+        <p class="debug-hint">Point the remote at the receiver, press a button (e.g. Light), then click <strong>Refresh last RF</strong> below so the next decode/compare uses that capture. Decode shows the hub symbol sequence and whether it matches our commands.</p>
+        <div class="debug-row">
+          <button type="button" id="btn-decode-hub" class="btn btn-primary">Decode last capture as Hub</button>
+          <button type="button" id="btn-compare-hub" class="btn btn-secondary">Compare remote vs hub expected (light)</button>
+        </div>
+        <div id="decode-hub-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>Last RF capture</h2>
+        <button type="button" id="btn-last-rf" class="btn btn-secondary">Refresh last RF</button>
+        <div id="last-rf-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>Expected pulses (no transmit)</h2>
+        <div class="debug-row">
+          <select id="debug-pulses-cmd" class="debug-select"></select>
+          <button type="button" id="btn-debug-pulses" class="btn btn-secondary">Get expected</button>
+        </div>
+        <div id="debug-pulses-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>GPIO state</h2>
+        <button type="button" id="btn-debug-gpio" class="btn btn-secondary">Refresh GPIO</button>
+        <div id="debug-gpio-result" class="debug-result" aria-live="polite"></div>
+      </section>
+
+      <section class="panel panel-debug">
+        <h2>Home Shield (hub)</h2>
+        <p class="debug-hint">Learn from your remote: 1) Press the remote’s <strong>Home Shield</strong> button. 2) Click <strong>Refresh last RF</strong> below. 3) Click below to save that capture. Then the Home Shield button on the main page will send it.</p>
+        <div class="debug-row">
+          <button type="button" id="btn-learn-home-shield" class="btn btn-primary">Use last capture as Home Shield</button>
+          <button type="button" id="btn-home-shield" class="btn btn-secondary">Send Home Shield now</button>
+        </div>
+        <div id="home-shield-result" class="debug-result" aria-live="polite"></div>
+      </section>
+    </main>
+  </div>
+  <script src="debug.js?v=2"></script>
+</body>
+</html>

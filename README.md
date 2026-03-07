@@ -34,6 +34,15 @@ See [docs/wiring.md](docs/wiring.md) for full wiring.
 
 **If the page shows “app.js did not load” or the console shows WebSocket `/ws` or 404s for `/saved`, `/saved-rf`, `/last-rf`:** the device is serving a different project’s filesystem (e.g. from irproject). From this repo run `pio run -t buildfs` then `pio run -t uploadfs`, then hard-refresh the browser (Ctrl+Shift+R / Cmd+Shift+R). You should then see “Ready — tap a button to send” and the Harbor Breeze buttons only.
 
+## Using on Android
+
+1. **Same WiFi** — Connect your phone to the same network as the ESP32.
+2. **Get the device IP** — From the serial monitor you'll see `[HB] IP: x.x.x.x`. Or from any device on the network (e.g. a computer), open `http://<device-ip>/ip` in a browser to see the IP as plain text.
+3. **Open the UI** — On your phone, open Chrome (or another browser) and go to **http://&lt;device-ip&gt;/** (replace with the actual IP, e.g. `http://192.168.1.42/`).
+4. **Add to Home screen (optional)** — In Chrome: menu (⋮) → **Add to Home screen** or **Install app**. The fan control will open like an app, with a dark theme and no browser chrome. You can then open it from your home screen with one tap.
+
+The web UI is a PWA: it uses a manifest and mobile meta tags so Android treats it like an app when added to the home screen.
+
 ## Web UI
 
 The single-page interface provides:
@@ -56,6 +65,12 @@ Each button sends the corresponding Harbor Breeze code over 315 MHz (6 repeats w
 - **GET /verify-tx?cmd=light_toggle** — **Sends** the command (transmits), waits for the onboard receiver to capture, then returns `{ "expected_length", "captured_length", "tx_seen_by_receiver", "expected_sample", "captured_sample" }`. Use to confirm the transmitter is putting out RF when the fan doesn’t respond (receiver on GPIO 5, see [docs/wiring.md](docs/wiring.md)).
 
 Command names: `light_toggle`, `light_dim`, `fan_off`, `fan_speed_1` … `fan_speed_6`, `fan_direction_summer`, `fan_direction_winter`, `nature_breeze`, `delay_off`, `delay_2h`, `delay_4h`, `delay_8h`, `home_shield`.
+
+**Home Shield** is learned from your remote: press the remote’s Home Shield button, then **Refresh last RF** (Debug), then **Use last capture as Home Shield**. Send via **GET /send-hub?cmd=home_shield**. Optional: **&raw=1** sends the full last capture repeated 12× (no learn step); **&gap=1** adds 8 ms between repeats. **Not all Harbor Breeze models support Home Shield** — if the physical remote’s Home Shield button does nothing (no double-blink, no away mode), the fan likely doesn’t support it.
+
+**Persisting Home Shield across flashes:** The learned frame is stored in NVS and usually survives a normal **firmware** upload (`pio run -t upload`). If you do a full erase or reflash filesystem, it can be lost. To back up: **GET /learned-home-shield** and save the JSON (e.g. `home-shield-backup.json`). To restore after a flash: **POST /restore-home-shield** with that JSON as body (e.g. `http --print=b POST http://<device-ip>/restore-home-shield < home-shield-backup.json`).
+
+**Get the 10 hub symbols without flashing:** If you already have Home Shield learned on the device, you can read the pulse array and decode it on your machine: **GET /learned-home-shield** (e.g. `curl -s http://<device-ip>/learned-home-shield > frame.json`), then run **`python3 scripts/decode_learned_home_shield.py frame.json`**. The script prints the 10 command symbols and a C array line you can paste into `HUB_HOME_SHIELD` in `src/harbor_breeze.cpp`.
 
 ## Verify transmitter with the receiver (fan not responding)
 

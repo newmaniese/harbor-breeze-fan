@@ -3,6 +3,8 @@
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
+#include <time.h>
 #include "harbor_breeze.h"
 #include "rf_capture.h"
 
@@ -18,6 +20,125 @@
 #define TX_INVERT_DEFAULT 0
 
 static int g_txInvert = TX_INVERT_DEFAULT;
+
+static Preferences statePrefs;
+static const char* STATE_NAMESPACE = "hbstate";
+static const char* KEY_DIR = "dir";       // 0=summer, 1=winter
+static const char* KEY_SPEED = "speed";  // 0=off, 1-6
+static const char* KEY_LIGHT = "light";   // 0=off, 1=on
+static const char* KEY_DELAY_END = "dend";  // Unix timestamp when delay turns off, 0=off
+static const char* KEY_HS_LEN = "hslen";   // length of learned Home Shield block (20–50)
+static const char* KEY_HS = "hs";          // up to 50 * uint16_t = 100 bytes
+static const int HOME_SHIELD_MIN_PULSES = 20;
+static const int HOME_SHIELD_MAX_PULSES = 50;
+static const int HOME_SHIELD_REPEATS = 12;   // match hub (light_toggle etc.): 12 repeats, no gap
+static const uint16_t HOME_SHIELD_GAP_US = 8000;
+
+// In-memory copy of learned Home Shield frame so send/verify see it immediately after learn (Preferences read-after-write can fail on same request).
+static uint16_t s_homeShieldFrame[HOME_SHIELD_MAX_PULSES];
+static int s_homeShieldLen = 0;
+
+static void stateBegin() {
+  statePrefs.begin(STATE_NAMESPACE, false);
+  // Load learned Home Shield from NVS into RAM so it's available without read-after-write issues
+  int n = (int)statePrefs.getUChar(KEY_HS_LEN, 0);
+  if (n >= HOME_SHIELD_MIN_PULSES && n <= HOME_SHIELD_MAX_PULSES &&
+      statePrefs.getBytes(KEY_HS, (void*)s_homeShieldFrame, (size_t)(n * sizeof(uint16_t))) == (size_t)(n * sizeof(uint16_t))) {
+    s_homeShieldLen = n;
+  } else {
+    s_homeShieldLen = 0;
+  }
+}
+static void stateSetDirection(int summer0_winter1) {
+  statePrefs.putUChar(KEY_DIR, (uint8_t)(summer0_winter1 & 1));
+}
+static void stateSetSpeed(int speed) {
+  statePrefs.putUChar(KEY_SPEED, (uint8_t)(speed <= 6 ? speed : 0));
+}
+static void stateSetLight(int on) {
+  statePrefs.putUChar(KEY_LIGHT, (uint8_t)(on ? 1 : 0));
+}
+static void stateSetDelayEnd(uint32_t utcEnd) {
+  statePrefs.putULong(KEY_DELAY_END, (unsigned long)utcEnd);
+}
+static int stateGetDirection() {
+  return (int)statePrefs.getUChar(KEY_DIR, 0);
+}
+static int stateGetSpeed() {
+  return (int)statePrefs.getUChar(KEY_SPEED, 0);
+}
+static int stateGetLight() {
+  return (int)statePrefs.getUChar(KEY_LIGHT, 0);
+}
+static uint32_t stateGetDelayEnd() {
+  return (uint32_t)statePrefs.getULong(KEY_DELAY_END, 0);
+}
+static void stateUpdateFromCmd(const char* cmd) {
+  if (strcmp(cmd, "fan_direction_summer") == 0) stateSetDirection(0);
+  else if (strcmp(cmd, "fan_direction_winter") == 0) stateSetDirection(1);
+  else if (strcmp(cmd, "fan_off") == 0) stateSetSpeed(0);
+  else if (strcmp(cmd, "fan_speed_1") == 0) stateSetSpeed(1);
+  else if (strcmp(cmd, "fan_speed_2") == 0) stateSetSpeed(2);
+  else if (strcmp(cmd, "fan_speed_3") == 0) stateSetSpeed(3);
+  else if (strcmp(cmd, "fan_speed_4") == 0) stateSetSpeed(4);
+  else if (strcmp(cmd, "fan_speed_5") == 0) stateSetSpeed(5);
+  else if (strcmp(cmd, "fan_speed_6") == 0) stateSetSpeed(6);
+  else if (strcmp(cmd, "light_toggle") == 0) stateSetLight(stateGetLight() ? 0 : 1);
+  else if (strcmp(cmd, "delay_off") == 0) stateSetDelayEnd(0);
+  else if (strcmp(cmd, "delay_2h") == 0) stateSetDelayEnd((uint32_t)time(nullptr) + 2 * 3600);
+  else if (strcmp(cmd, "delay_4h") == 0) stateSetDelayEnd((uint32_t)time(nullptr) + 4 * 3600);
+  else if (strcmp(cmd, "delay_8h") == 0) stateSetDelayEnd((uint32_t)time(nullptr) + 8 * 3600);
+}
+
+// Learned Home Shield: 20–50 pulses stored; sent 24× with 8 ms gap between repeats.
+// Skip any leading idle (receiver "time to first edge" > 1 ms) so the stored frame starts with the real burst (~400 µs for hub).
+static bool homeShieldSaveFrame(const uint16_t* pulses, int len) {
+  if (!pulses || len < HOME_SHIELD_MIN_PULSES + 1) return false;
+  int start = 0;
+  if (pulses[0] > 1000) start = 1;  // drop leading idle so first pulse is ~400/440 µs (hub start)
+  int n = len - start;
+  if (n < HOME_SHIELD_MIN_PULSES) return false;
+  if (n > HOME_SHIELD_MAX_PULSES) n = HOME_SHIELD_MAX_PULSES;
+  statePrefs.putUChar(KEY_HS_LEN, (uint8_t)n);
+  statePrefs.putBytes(KEY_HS, (const void*)(pulses + start), (size_t)(n * sizeof(uint16_t)));
+  memcpy(s_homeShieldFrame, pulses + start, (size_t)(n * sizeof(uint16_t)));
+  s_homeShieldLen = n;
+  statePrefs.end();
+  statePrefs.begin(STATE_NAMESPACE, false);
+  return true;
+}
+// Save Home Shield frame from an array (for restore from backup).
+static bool homeShieldSaveFrameFromArray(const uint16_t* arr, int len) {
+  if (!arr || len < HOME_SHIELD_MIN_PULSES || len > HOME_SHIELD_MAX_PULSES) return false;
+  statePrefs.putUChar(KEY_HS_LEN, (uint8_t)len);
+  statePrefs.putBytes(KEY_HS, (const void*)arr, (size_t)(len * sizeof(uint16_t)));
+  memcpy(s_homeShieldFrame, arr, (size_t)(len * sizeof(uint16_t)));
+  s_homeShieldLen = len;
+  statePrefs.end();
+  statePrefs.begin(STATE_NAMESPACE, false);
+  return true;
+}
+// Build Home Shield pulse array. If useGap true: 24 blocks with 8 ms gap between; if false: 24 blocks back-to-back.
+static int homeShieldBuildPulsesEx(uint16_t* out, int maxOut, bool useGap) {
+  int n = s_homeShieldLen;
+  if (n < HOME_SHIELD_MIN_PULSES || n > HOME_SHIELD_MAX_PULSES) return 0;
+  int need = useGap ? (HOME_SHIELD_REPEATS * n + (HOME_SHIELD_REPEATS - 1)) : (HOME_SHIELD_REPEATS * n);
+  if (maxOut < need) return 0;
+  int idx = 0;
+  for (int r = 0; r < HOME_SHIELD_REPEATS; r++) {
+    for (int i = 0; i < n; i++)
+      out[idx++] = s_homeShieldFrame[i];
+    if (useGap && r < HOME_SHIELD_REPEATS - 1)
+      out[idx++] = HOME_SHIELD_GAP_US;
+  }
+  return idx;
+}
+static int homeShieldBuildPulses(uint16_t* out, int maxOut) {
+  return homeShieldBuildPulsesEx(out, maxOut, false);
+}
+static bool homeShieldLearned() {
+  return s_homeShieldLen >= HOME_SHIELD_MIN_PULSES && s_homeShieldLen <= HOME_SHIELD_MAX_PULSES;
+}
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -119,7 +240,7 @@ static void handleRoot(AsyncWebServerRequest* req) {
     return;
   }
   AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/index.html", "text/html");
-  resp->addHeader("Cache-Control", "no-cache, must-revalidate");
+  resp->addHeader("Cache-Control", "max-age=3600");
   req->send(resp);
 }
 
@@ -170,7 +291,27 @@ static void handleAppCss(AsyncWebServerRequest* req) {
     return;
   }
   AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/app.css", "text/css");
-  resp->addHeader("Cache-Control", "max-age=86400");
+  resp->addHeader("Cache-Control", "max-age=3600");
+  req->send(resp);
+}
+
+static void handleSettings(AsyncWebServerRequest* req) {
+  if (!LittleFS.exists("/settings.html")) {
+    req->send(404, "text/plain", "settings.html not found");
+    return;
+  }
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/settings.html", "text/html");
+  resp->addHeader("Cache-Control", "max-age=3600");
+  req->send(resp);
+}
+
+static void handleDebug(AsyncWebServerRequest* req) {
+  if (!LittleFS.exists("/debug.html")) {
+    req->send(404, "text/plain", "debug.html not found");
+    return;
+  }
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/debug.html", "text/html");
+  resp->addHeader("Cache-Control", "max-age=3600");
   req->send(resp);
 }
 
@@ -180,7 +321,37 @@ static void handleAppJs(AsyncWebServerRequest* req) {
     return;
   }
   AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/app.js", "application/javascript");
-  resp->addHeader("Cache-Control", "no-cache, must-revalidate");
+  resp->addHeader("Cache-Control", "max-age=3600");
+  req->send(resp);
+}
+
+static void serveJsFile(AsyncWebServerRequest* req, const char* path) {
+  if (!LittleFS.exists(path)) {
+    req->send(404, "text/plain", "Not found");
+    return;
+  }
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, path, "application/javascript");
+  resp->addHeader("Cache-Control", "max-age=3600");
+  req->send(resp);
+}
+
+static void handleManifest(AsyncWebServerRequest* req) {
+  if (!LittleFS.exists("/manifest.json")) {
+    req->send(404, "text/plain", "Not found");
+    return;
+  }
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/manifest.json", "application/manifest+json");
+  resp->addHeader("Cache-Control", "max-age=86400");
+  req->send(resp);
+}
+
+static void handleIcon192(AsyncWebServerRequest* req) {
+  if (!LittleFS.exists("/icon-192.png")) {
+    req->send(404, "text/plain", "Not found");
+    return;
+  }
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/icon-192.png", "image/png");
+  resp->addHeader("Cache-Control", "max-age=86400");
   req->send(resp);
 }
 
@@ -225,9 +396,28 @@ void setup() {
   printf("\n[HB] IP: %s\n", WiFi.localIP().toString().c_str());
   printf("[HB] http://%s/\n", WiFi.localIP().toString().c_str());
 
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = 0;
+  for (int i = 0; i < 20; i++) {
+    delay(500);
+    now = time(nullptr);
+    if (now > 1600000000) break;  // valid time
+  }
+  if (now > 1600000000) printf("[HB] NTP synced\n");
+  else printf("[HB] NTP not synced, delay countdown may be wrong\n");
+
+  stateBegin();
+
   server.on(AsyncURIMatcher::exact("/"), HTTP_GET, handleRoot);
+  server.on(AsyncURIMatcher::exact("/settings"), HTTP_GET, handleSettings);
+  server.on(AsyncURIMatcher::exact("/debug"), HTTP_GET, handleDebug);
   server.on(AsyncURIMatcher::exact("/app.css"), HTTP_GET, handleAppCss);
   server.on(AsyncURIMatcher::exact("/app.js"), HTTP_GET, handleAppJs);
+  server.on(AsyncURIMatcher::exact("/controls.js"), HTTP_GET, [](AsyncWebServerRequest* req) { serveJsFile(req, "/controls.js"); });
+  server.on(AsyncURIMatcher::exact("/settings.js"), HTTP_GET, [](AsyncWebServerRequest* req) { serveJsFile(req, "/settings.js"); });
+  server.on(AsyncURIMatcher::exact("/debug.js"), HTTP_GET, [](AsyncWebServerRequest* req) { serveJsFile(req, "/debug.js"); });
+  server.on(AsyncURIMatcher::exact("/manifest.json"), HTTP_GET, handleManifest);
+  server.on(AsyncURIMatcher::exact("/icon-192.png"), HTTP_GET, handleIcon192);
   server.on("/ip", HTTP_GET, [](AsyncWebServerRequest* req) {
     req->send(200, "text/plain", WiFi.localIP().toString());
   });
@@ -258,15 +448,216 @@ void setup() {
       n = harborBreezeHubRotateCcwPulses(pulses, HB_HUB_MAX_PULSES);
     } else if (cmd.equals("fan_direction_winter")) {
       n = harborBreezeHubRotateCwPulses(pulses, HB_HUB_MAX_PULSES);
+    } else if (cmd.equals("home_shield")) {
+      bool raw = req->hasParam("raw") && req->getParam("raw")->value().toInt() == 1;
+      bool useLearned = req->hasParam("learned") && req->getParam("learned")->value().toInt() == 1;
+      if (raw) {
+        static uint16_t rawCapBuf[RF_CAPTURE_MAX_PULSES];
+        int capLen = rfCaptureGetLastPulses(rawCapBuf, RF_CAPTURE_MAX_PULSES);
+        if (capLen < HOME_SHIELD_MIN_PULSES) {
+          req->send(400, "application/json", "{\"ok\":false,\"error\":\"No capture or too short for raw. Press remote Home Shield, then GET /last-rf, then send-hub?cmd=home_shield&raw=1 immediately.\"}");
+          return;
+        }
+        int reps = HB_HUB_MAX_PULSES / capLen;
+        if (reps > 12) reps = 12;
+        if (reps < 2) reps = 2;
+        n = 0;
+        for (int r = 0; r < reps && n + capLen <= HB_HUB_MAX_PULSES; r++)
+          for (int i = 0; i < capLen; i++) pulses[n++] = rawCapBuf[i];
+        if (n == 0) { req->send(500, "application/json", "{\"ok\":false,\"error\":\"Raw build failed\"}"); return; }
+      } else if (useLearned && homeShieldLearned()) {
+        bool useGap = req->hasParam("gap") && req->getParam("gap")->value().toInt() == 1;
+        n = homeShieldBuildPulsesEx(pulses, HB_HUB_MAX_PULSES, useGap);
+      } else {
+        n = harborBreezeHubHomeShieldPulses(pulses, HB_HUB_MAX_PULSES);
+      }
     }
     if (n <= 0) {
-      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Hub: unknown cmd. Use light_toggle, light_dim, fan_off, fan_speed_1..6, nature_breeze, fan_direction_summer, fan_direction_winter\"}");
+      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Hub: unknown cmd. Use light_toggle, light_dim, fan_off, fan_speed_1..6, nature_breeze, fan_direction_summer, fan_direction_winter, home_shield\"}");
       return;
     }
     sendPulses(pulses, n);
+    stateUpdateFromCmd(cmd.c_str());
     printf("[HB] Sent hub: %s (%d pulses)\n", cmd.c_str(), n);
     req->send(200, "application/json", "{\"ok\":true,\"cmd\":\"" + cmd + "\",\"protocol\":\"hub\"}");
   });
+
+  // Return the currently learned Home Shield frame (in-memory; matches what send uses). GET /learned-home-shield
+  server.on("/learned-home-shield", HTTP_GET, [](AsyncWebServerRequest* req) {
+    int n = s_homeShieldLen;
+    if (n < HOME_SHIELD_MIN_PULSES || n > HOME_SHIELD_MAX_PULSES) {
+      req->send(200, "application/json", "{\"learned\":false,\"message\":\"No Home Shield frame learned yet.\"}");
+      return;
+    }
+    JsonDocument doc;
+    doc["learned"] = true;
+    doc["frame_length"] = n;
+    JsonArray arr = doc["frame"].to<JsonArray>();
+    for (int i = 0; i < n; i++) arr.add(s_homeShieldFrame[i]);
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
+  // Decode the learned Home Shield frame to hub symbols and return the 10 command symbols (for pasting into HUB_HOME_SHIELD in harbor_breeze.cpp). GET /learned-home-shield-symbols
+  server.on("/learned-home-shield-symbols", HTTP_GET, [](AsyncWebServerRequest* req) {
+    int n = s_homeShieldLen;
+    JsonDocument doc;
+    doc["learned"] = (n >= HOME_SHIELD_MIN_PULSES && n <= HOME_SHIELD_MAX_PULSES);
+    if (n < HOME_SHIELD_MIN_PULSES || n > HOME_SHIELD_MAX_PULSES) {
+      doc["ok"] = false;
+      doc["error"] = "No Home Shield frame learned yet.";
+      String out;
+      serializeJson(doc, out);
+      req->send(200, "application/json", out);
+      return;
+    }
+    if (n < 50) {
+      doc["ok"] = false;
+      doc["error"] = "Stored frame has " + String(n) + " pulses; hub decode needs 50. Re-learn by pressing Home Shield on remote, then Learn from last RF.";
+      doc["frame_length"] = n;
+      String out;
+      serializeJson(doc, out);
+      req->send(200, "application/json", out);
+      return;
+    }
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int decoded = harborBreezeHubDecodePulses(s_homeShieldFrame, n, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+    doc["ok"] = (decoded == 25);
+    doc["frame_length"] = n;
+    if (decoded == 25) {
+      doc["symbols"] = symbols_buf;
+      if (matched_cmd) doc["matched_cmd"] = matched_cmd;
+      // Parse "SL, SL, SS, ..." to get last 10 symbols as array for HUB_HOME_SHIELD
+      JsonArray cmdArr = doc["command_symbols"].to<JsonArray>();
+      const char* p = symbols_buf;
+      char sym[25][3];
+      int i = 0;
+      for (; i < 25 && *p; i++) {
+        while (*p == ',' || *p == ' ') p++;
+        if (!p[0] || !p[1]) break;
+        sym[i][0] = p[0];
+        sym[i][1] = p[1];
+        sym[i][2] = '\0';
+        p += 2;
+      }
+      if (i >= 25) {
+        for (int j = 15; j < 25; j++) cmdArr.add(sym[j]);
+      }
+    } else {
+      doc["error"] = "Stored frame does not decode as hub protocol (expected 400/500/850/950 µs pairs).";
+    }
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
+  // Learn Home Shield from last RF capture (20–50 pulses). Call after pressing remote's Home Shield and refreshing last RF.
+  server.on("/learn-home-shield", HTTP_POST, [](AsyncWebServerRequest* req) {
+    uint16_t pulses[RF_CAPTURE_MAX_PULSES];
+    int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
+    if (n < HOME_SHIELD_MIN_PULSES) {
+      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Capture too short (need at least 20 pulses). Press the remote\\'s Home Shield, click Refresh last RF, then try again.\"}");
+      return;
+    }
+    if (!homeShieldSaveFrame(pulses, n)) {
+      req->send(500, "application/json", "{\"ok\":false,\"error\":\"Save failed\"}");
+      return;
+    }
+    printf("[HB] Learned Home Shield from %d pulses\n", n);
+    req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield learned. You can now use the Home Shield button.\"}");
+  });
+  server.on("/learn-home-shield", HTTP_GET, [](AsyncWebServerRequest* req) {
+    uint16_t pulses[RF_CAPTURE_MAX_PULSES];
+    int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
+    if (n < HOME_SHIELD_MIN_PULSES) {
+      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Capture too short (need at least 20 pulses). Press the remote\\'s Home Shield, click Refresh last RF, then try again.\"}");
+      return;
+    }
+    if (!homeShieldSaveFrame(pulses, n)) {
+      req->send(500, "application/json", "{\"ok\":false,\"error\":\"Save failed\"}");
+      return;
+    }
+    printf("[HB] Learned Home Shield from %d pulses\n", n);
+    req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield learned. You can now use the Home Shield button.\"}");
+  });
+
+  // Restore Home Shield from backup (e.g. after reflash). POST body: {"frame": [399, 655, 1046, ...]}
+  server.on("/restore-home-shield", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
+    [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+      static String body;
+      if (index == 0) body = "";
+      if (len) body.concat((const char*)data, len);
+      if (index + len != total) return;
+      JsonDocument doc;
+      if (deserializeJson(doc, body)) {
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
+        return;
+      }
+      JsonArray arr = doc["frame"].as<JsonArray>();
+      if (arr.isNull() || arr.size() < (size_t)HOME_SHIELD_MIN_PULSES || arr.size() > (size_t)HOME_SHIELD_MAX_PULSES) {
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Need frame array with 20–50 numbers\"}");
+        return;
+      }
+      uint16_t frame[HOME_SHIELD_MAX_PULSES];
+      size_t n = arr.size();
+      for (size_t i = 0; i < n; i++) frame[i] = (uint16_t)arr[i].as<uint32_t>();
+      if (!homeShieldSaveFrameFromArray(frame, (int)n)) {
+        req->send(500, "application/json", "{\"ok\":false,\"error\":\"Restore failed\"}");
+        return;
+      }
+      printf("[HB] Restored Home Shield from backup (%zu pulses)\n", n);
+      req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield restored from backup.\"}");
+    });
+
+  server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest* req) {
+    uint32_t delayEnd = stateGetDelayEnd();
+    time_t now = time(nullptr);
+    int remaining = 0;
+    if (delayEnd > 0 && (time_t)delayEnd > now) {
+      remaining = (int)((time_t)delayEnd - now);
+    } else if (delayEnd > 0) {
+      stateSetDelayEnd(0);
+    }
+    JsonDocument doc;
+    doc["light_on"] = stateGetLight() != 0;
+    doc["fan_direction"] = stateGetDirection() == 1 ? "winter" : "summer";
+    doc["fan_speed"] = stateGetSpeed();
+    doc["delay_active"] = remaining > 0;
+    doc["delay_remaining_sec"] = remaining;
+    doc["home_shield_learned"] = homeShieldLearned();
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
+  server.on("/api/state", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
+    [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
+      static String body;
+      if (index == 0) body = "";
+      if (len) body.concat((const char*)data, len);
+      if (index + len != total) return;
+
+      JsonDocument doc;
+      if (deserializeJson(doc, body)) {
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
+        return;
+      }
+      if (doc["light_on"].is<bool>()) {
+        stateSetLight(doc["light_on"].as<bool>() ? 1 : 0);
+      }
+      if (doc["fan_speed"].is<int>()) {
+        int s = doc["fan_speed"].as<int>();
+        if (s >= 0 && s <= 6) stateSetSpeed(s);
+      }
+      const char* dir = doc["fan_direction"].as<const char*>();
+      if (dir) {
+        if (strcmp(dir, "winter") == 0) stateSetDirection(1);
+        else if (strcmp(dir, "summer") == 0) stateSetDirection(0);
+      }
+      req->send(200, "application/json", "{\"ok\":true}");
+    });
 
   server.on("/send", HTTP_GET, [](AsyncWebServerRequest* req) {
     String cmd = req->hasParam("cmd") ? req->getParam("cmd")->value() : "";
@@ -325,6 +716,7 @@ void setup() {
         return;
       }
       sendPulses(pulses, n);
+      stateUpdateFromCmd(cmd);
       printf("[HB] Sent %s (%d pulses)\n", cmd, n);
       req->send(200, "application/json", "{\"ok\":true,\"cmd\":\"" + String(cmd) + "\"}");
     });
@@ -460,19 +852,87 @@ void setup() {
     req->send(200, "application/json", out);
   });
 
+  // Debug: hub expected pulses (no TX). Same shape as /debug-pulses but for hub protocol.
+  server.on("/debug-pulses-hub", HTTP_GET, [](AsyncWebServerRequest* req) {
+    String cmd = req->hasParam("cmd") ? req->getParam("cmd")->value() : "light_toggle";
+    cmd.trim();
+    static uint16_t pulses[HB_HUB_MAX_PULSES];
+    int n = 0;
+    if (cmd.equals("light_toggle")) n = harborBreezeHubLightTogglePulses(pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("light_dim")) n = harborBreezeHubLightDimPulses(pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_off") || cmd.equals("fan_power")) n = harborBreezeHubFanPowerPulses(pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_1")) n = harborBreezeHubFanSpeedPulses(1, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_2")) n = harborBreezeHubFanSpeedPulses(2, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_3")) n = harborBreezeHubFanSpeedPulses(3, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_4")) n = harborBreezeHubFanSpeedPulses(4, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_5")) n = harborBreezeHubFanSpeedPulses(5, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_6")) n = harborBreezeHubFanSpeedPulses(6, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("nature_breeze")) n = harborBreezeHubBreezePulses(pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_direction_summer")) n = harborBreezeHubRotateCcwPulses(pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_direction_winter")) n = harborBreezeHubRotateCwPulses(pulses, HB_HUB_MAX_PULSES);
+    if (n <= 0) {
+      req->send(400, "application/json", "{\"error\":\"Hub: unknown cmd\"}");
+      return;
+    }
+    JsonDocument doc;
+    doc["cmd"] = cmd;
+    doc["protocol"] = "hub";
+    doc["length"] = n;
+    JsonArray arr = doc["pulses"].to<JsonArray>();
+    for (int i = 0; i < n; i++) arr.add(pulses[i]);
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
+  // Decode last RF capture as hub protocol; return symbols and matched command name.
+  server.on("/last-rf-decode-hub", HTTP_GET, [](AsyncWebServerRequest* req) {
+    static uint16_t pulses[RF_CAPTURE_MAX_PULSES];
+    int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
+    if (n < 50) {
+      req->send(200, "application/json", "{\"ok\":false,\"error\":\"No capture or too short. Point remote at receiver and press a button, then GET /last-rf first.\"}");
+      return;
+    }
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int decoded = harborBreezeHubDecodePulses(pulses, n, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+    JsonDocument doc;
+    doc["ok"] = (decoded == 25);
+    doc["length"] = n;
+    if (decoded == 25) {
+      doc["symbols"] = symbols_buf;
+      if (matched_cmd) doc["matched_cmd"] = matched_cmd;
+    } else {
+      doc["error"] = "Capture does not look like hub protocol (expected 400/500/850/950 µs pairs). Try legacy compare.";
+    }
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
   // Verify TX: send a command, wait for receiver to capture, return expected vs captured for comparison.
   server.on("/verify-tx", HTTP_GET, [](AsyncWebServerRequest* req) {
     String cmd = req->hasParam("cmd") ? req->getParam("cmd")->value() : "light_toggle";
-    const char* func = findFunc(cmd.c_str());
-    if (!func) {
-      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Unknown command\"}");
-      return;
-    }
-    uint16_t expectedPulses[HB_MAX_PULSES];
-    int expectedLen = harborBreezeCommandPulses(func, expectedPulses, HB_MAX_PULSES);
-    if (expectedLen <= 0) {
-      req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
-      return;
+    static uint16_t expectedPulsesBuf[HB_HUB_MAX_PULSES];
+    uint16_t* expectedPulses = expectedPulsesBuf;
+    int expectedLen = 0;
+    if (cmd.equals("home_shield")) {
+      expectedLen = homeShieldBuildPulses(expectedPulsesBuf, HB_HUB_MAX_PULSES);
+      if (expectedLen <= 0) {
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Home Shield not learned\"}");
+        return;
+      }
+    } else {
+      const char* func = findFunc(cmd.c_str());
+      if (!func) {
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Unknown command\"}");
+        return;
+      }
+      expectedLen = harborBreezeCommandPulses(func, expectedPulsesBuf, HB_MAX_PULSES);
+      if (expectedLen <= 0) {
+        req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
+        return;
+      }
     }
     uint32_t seqBefore = rfCaptureGetLastSeq();
     sendPulses(expectedPulses, expectedLen);

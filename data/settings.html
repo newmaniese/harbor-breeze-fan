@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1419">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Settings — Harbor Breeze Fan</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="app.css?v=3">
+</head>
+<body class="page-settings">
+  <div class="app">
+    <header class="header">
+      <h1>Settings</h1>
+      <nav class="nav-links">
+        <a href="/">Controls</a>
+        <a href="/settings">Settings</a>
+        <a href="/debug">Debug</a>
+      </nav>
+    </header>
+
+    <main class="main">
+      <section class="panel">
+        <h2>Current state (sync)</h2>
+        <p class="debug-hint">Set the state the app assumes for light and fan. Use this if the physical fan/light is out of sync (e.g. changed by remote).</p>
+        <div class="debug-row">
+          <label for="sync-light">Light</label>
+          <select id="sync-light" class="debug-select">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </div>
+        <div class="debug-row">
+          <label for="sync-fan-speed">Fan speed</label>
+          <select id="sync-fan-speed" class="debug-select">
+            <option value="0">Off</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </div>
+        <div class="debug-row">
+          <label for="sync-fan-direction">Fan direction</label>
+          <select id="sync-fan-direction" class="debug-select">
+            <option value="summer">Summer</option>
+            <option value="winter">Winter</option>
+          </select>
+        </div>
+        <button type="button" id="sync-state-save" class="btn btn-primary btn-touch">Save state</button>
+      </section>
+      <section class="panel">
+        <h2>Transmitter</h2>
+        <div class="debug-row">
+          <label for="tx-invert">TX invert</label>
+          <select id="tx-invert" class="debug-select">
+            <option value="0">0 (active-high)</option>
+            <option value="1">1 (active-low)</option>
+          </select>
+        </div>
+        <p class="debug-hint">If the fan does not react, try flipping this. Default is 0 (active-high) for hub protocol.</p>
+        <p id="settings-status" class="status"></p>
+      </section>
+    </main>
+  </div>
+  <script src="settings.js?v=3"></script>
+</body>
+</html>

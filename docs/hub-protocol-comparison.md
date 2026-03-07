@@ -18,6 +18,13 @@ So:
 - **Repetition**: Hub sends **12** full frames back-to-back with **no gap**. We send **6** with **8 ms** gap. More repeats and no gap may help.
 - **Structure**: Hub uses a **symbol preamble** (e.g. remote "0" = 15× SL) plus a **symbol command**, not a 17+8 bit string. If your remote matches the hub’s remotes (DIP 0 → remote id "0"), the fan may only accept that format.
 
+## Figuring out Hub codes for your fan
+
+Use **Debug → Figure out Hub codes**:
+
+1. **Decode last capture as Hub** — Point the fan’s remote at the receiver, press a button (e.g. Light), then click **Refresh last RF** (Last RF capture), then **Decode last capture as Hub**. You’ll see the 25 symbol sequence (15 remote ID + 10 command) and whether it matches a known hub command (`light_toggle`, `fan_speed_1`, etc.). If it doesn’t match, the displayed symbols are the exact code your remote sends; you can add them to the firmware.
+2. **Compare remote vs hub expected (light)** — Press Light on the remote, then click this. It shows your captured pulse timings next to the hub’s expected `light_toggle` pulses. If the first pair is ~400, ~950 µs, your remote is likely hub protocol.
+
 ## What to Try (in order)
 
 1. **Capture your physical remote**  

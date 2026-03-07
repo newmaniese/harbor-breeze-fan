@@ -51,7 +51,7 @@
   }
 
   // Hub protocol commands (same protocol that works with the fan). Others use legacy POST /send.
-  var hubCommands = ['light_toggle', 'light_dim', 'fan_off', 'fan_speed_1', 'fan_speed_2', 'fan_speed_3', 'fan_speed_4', 'fan_speed_5', 'fan_speed_6', 'nature_breeze', 'fan_direction_summer', 'fan_direction_winter'];
+  var hubCommands = ['light_toggle', 'light_dim', 'fan_off', 'fan_speed_1', 'fan_speed_2', 'fan_speed_3', 'fan_speed_4', 'fan_speed_5', 'fan_speed_6', 'nature_breeze', 'fan_direction_summer', 'fan_direction_winter', 'home_shield'];
 
   function sendCommand(cmd) {
     setStatus('Sending…');

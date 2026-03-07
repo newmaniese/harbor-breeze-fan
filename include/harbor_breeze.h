@@ -74,5 +74,9 @@ int harborBreezeHubFanSpeedPulses(int speed, uint16_t* out, int maxOut);  // spe
 int harborBreezeHubBreezePulses(uint16_t* out, int maxOut);
 int harborBreezeHubRotateCcwPulses(uint16_t* out, int maxOut);   // summer
 int harborBreezeHubRotateCwPulses(uint16_t* out, int maxOut);   // winter
+int harborBreezeHubHomeShieldPulses(uint16_t* out, int maxOut);  // Home Shield (away mode)
+
+// Decode captured pulses (alternating on/off µs) into hub symbols. Fills symbols_buf with 25 comma-separated symbols (15 remote + 10 command). Sets *matched_cmd to command name if the 10-symbol command matches a known hub command, else NULL. Returns 25 if decoded, 0 otherwise.
+int harborBreezeHubDecodePulses(const uint16_t* pulses, int len, char* symbols_buf, size_t buf_sz, const char** matched_cmd);
 
 #endif // HARBOR_BREEZE_H

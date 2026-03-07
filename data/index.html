@@ -2,138 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1419">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Harbor Breeze Fan</title>
-  <link rel="stylesheet" href="app.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="app.css?v=4">
 </head>
-<body>
+<body class="page-controls">
   <div class="app">
-    <header class="header">
+    <header class="header header-compact">
       <h1>Harbor Breeze Fan</h1>
-      <p class="subtitle">315 MHz remote control <span class="protocol-badge" title="Uses hub protocol">hub</span></p>
+      <p class="subtitle">315 MHz <span class="protocol-badge">hub</span></p>
     </header>
 
     <main class="main">
       <section class="panel panel-light">
-        <h2>Light</h2>
-        <div class="btn-row">
-          <button type="button" class="btn btn-primary" data-cmd="light_toggle">Light On / Off</button>
-          <button type="button" class="btn btn-secondary" data-cmd="light_dim">Dim</button>
+        <div class="btn-row btn-row-mobile btn-row-center">
+          <button type="button" id="btn-light" class="btn btn-light-icon" aria-label="Light on/off (hold to dim when on)">
+            <span class="light-icon light-icon-off" id="light-icon" aria-hidden="true">
+              <svg class="light-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path class="light-bulb" d="M9 18h6M9 21h6M12 3a6 6 0 0 1 4.5 10H7.5A6 6 0 0 1 12 3z"/>
+                <path class="light-base" d="M10 22h4"/>
+              </svg>
+            </span>
+          </button>
         </div>
+        <p class="light-hint">Tap to toggle. Hold to dim when on.</p>
       </section>
 
       <section class="panel panel-fan">
         <h2>Fan</h2>
-        <div class="btn-row">
-          <button type="button" class="btn btn-fan-off" data-cmd="fan_off">Off</button>
-        </div>
-        <div class="speed-row">
-          <span class="label">Speed</span>
-          <div class="speed-btns">
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_1">1</button>
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_2">2</button>
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_3">3</button>
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_4">4</button>
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_5">5</button>
-            <button type="button" class="btn btn-speed" data-cmd="fan_speed_6">6</button>
+        <div class="speed-slider-row">
+          <label for="fan-speed-slider" class="speed-slider-label">Speed</label>
+          <input type="range" id="fan-speed-slider" class="speed-slider" min="0" max="6" value="0" step="1" aria-label="Fan speed Off to 6">
+          <div class="speed-slider-ticks" aria-hidden="true">
+            <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
           </div>
         </div>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary" data-cmd="fan_direction_summer">Summer</button>
-          <button type="button" class="btn btn-secondary" data-cmd="fan_direction_winter">Winter</button>
+        <div class="direction-toggle-wrap direction-toggle-wrap-centered">
+          <span class="direction-label">Direction</span>
+          <div class="direction-toggle-group">
+            <span class="direction-option" data-dir="summer">Summer</span>
+            <button type="button" id="direction-toggle" class="direction-toggle" aria-label="Fan direction (long-press to change)">
+              <span class="direction-toggle-track">
+                <span class="direction-toggle-thumb" id="direction-thumb"></span>
+              </span>
+            </button>
+            <span class="direction-option" data-dir="winter">Winter</span>
+          </div>
+          <span class="direction-hint">Long-press to change</span>
         </div>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary" data-cmd="nature_breeze">Nature Breeze</button>
+        <div class="btn-row btn-row-mobile btn-row-center">
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="nature_breeze">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v16M12 8v8M15 6v12M18 10v4"/></svg></span>
+            Nature Breeze
+          </button>
         </div>
       </section>
 
       <section class="panel panel-delay">
         <h2>Delay off</h2>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary" data-cmd="delay_off">Off</button>
-          <button type="button" class="btn btn-secondary" data-cmd="delay_2h">2 h</button>
-          <button type="button" class="btn btn-secondary" data-cmd="delay_4h">4 h</button>
-          <button type="button" class="btn btn-secondary" data-cmd="delay_8h">8 h</button>
+        <div id="delay-countdown" class="delay-countdown" aria-live="polite"></div>
+        <div class="btn-row btn-row-mobile btn-row-center delay-btns">
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="delay_off">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+            Off
+          </button>
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="delay_2h">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+            2 h
+          </button>
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="delay_4h">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+            4 h
+          </button>
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="delay_8h">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+            8 h
+          </button>
         </div>
       </section>
 
-      <section class="panel panel-extras">
-        <h2>Extras</h2>
-        <div class="btn-row">
-          <button type="button" class="btn btn-secondary" data-cmd="home_shield">Home Shield</button>
+      <section class="panel panel-home-shield">
+        <div class="btn-row btn-row-mobile btn-row-center">
+          <button type="button" class="btn btn-secondary btn-touch btn-with-icon" data-cmd="home_shield">
+            <span class="btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+            Home Shield
+          </button>
         </div>
+        <p class="debug-hint">One-time learn in Debug: press remote’s Home Shield, Refresh last RF, then “Use last capture as Home Shield”.</p>
       </section>
     </main>
 
-    <section class="panel panel-log">
-      <h2>Send log</h2>
-      <div id="send-log" class="send-log" aria-live="polite"></div>
-    </section>
-
-    <section class="panel panel-rf-log">
-      <h2>RF receive <span id="ws-status" class="ws-badge ws-disconnected">Disconnected</span></h2>
-      <p class="rf-log-hint">Point the remote at the receiver; received codes appear below in real time.</p>
-      <div id="rf-log" class="rf-log" aria-live="polite"></div>
-    </section>
-
-    <section class="panel panel-debug">
-      <h2>Debug &amp; settings</h2>
-      <div class="debug-section">
-        <h3 class="debug-heading">Transmitter</h3>
-        <div class="debug-row">
-          <label for="tx-invert">TX invert</label>
-          <select id="tx-invert" class="debug-select" aria-label="TX invert: 0 = active-high, 1 = active-low">
-            <option value="0" selected>0 (active-high)</option>
-            <option value="1">1 (active-low)</option>
-          </select>
-        </div>
-        <p class="debug-hint">If the fan does not react, try flipping this. Default is 0 (active-high) for hub protocol.</p>
-      </div>
-      <div class="debug-section">
-        <h3 class="debug-heading">Verify TX (receiver must be connected)</h3>
-        <div class="debug-row">
-          <label for="verify-cmd">Command</label>
-          <select id="verify-cmd" class="debug-select"></select>
-          <button type="button" id="btn-verify-tx" class="btn btn-secondary">Verify TX</button>
-        </div>
-        <div id="verify-tx-result" class="debug-result" aria-live="polite"></div>
-      </div>
-      <div class="debug-section">
-        <h3 class="debug-heading">Compare with physical remote (light)</h3>
-        <p class="debug-hint">1) Point the fan’s remote at the receiver. 2) Press <strong>Light On/Off</strong> once. 3) Click below to capture what the remote sent and compare to our expected light_toggle.</p>
-        <button type="button" id="btn-compare-remote" class="btn btn-primary">Capture remote &amp; compare (light_toggle)</button>
-        <div id="compare-remote-result" class="debug-result" aria-live="polite"></div>
-      </div>
-      <div class="debug-section">
-        <h3 class="debug-heading">Last RF capture</h3>
-        <button type="button" id="btn-last-rf" class="btn btn-secondary">Refresh last RF</button>
-        <div id="last-rf-result" class="debug-result" aria-live="polite"></div>
-      </div>
-      <div class="debug-section">
-        <h3 class="debug-heading">Expected pulses (no transmit)</h3>
-        <div class="debug-row">
-          <select id="debug-pulses-cmd" class="debug-select"></select>
-          <button type="button" id="btn-debug-pulses" class="btn btn-secondary">Get expected</button>
-        </div>
-        <div id="debug-pulses-result" class="debug-result" aria-live="polite"></div>
-      </div>
-      <div class="debug-section">
-        <h3 class="debug-heading">GPIO state</h3>
-        <button type="button" id="btn-debug-gpio" class="btn btn-secondary">Refresh GPIO</button>
-        <div id="debug-gpio-result" class="debug-result" aria-live="polite"></div>
-      </div>
-    </section>
-
     <footer class="footer">
       <p id="status" class="status"></p>
+      <nav class="nav-bottom" aria-label="Secondary">
+        <a href="/settings" class="nav-bottom-link">Settings</a>
+        <a href="/debug" class="nav-bottom-link">Debug</a>
+      </nav>
     </footer>
   </div>
-  <script src="app.js?v=hub"></script>
-  <script>
-    if (!window.appReady) {
-      var s = document.getElementById('status');
-      if (s) s.textContent = 'app.js did not load. Upload filesystem: pio run -t buildfs && pio run -t uploadfs';
-    }
-  </script>
+  <script src="controls.js?v=4"></script>
 </body>
 </html>
