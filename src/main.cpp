@@ -231,13 +231,16 @@ void setup() {
   });
 
   // Hub protocol: same as github.com/enlilodisho/harbor-breeze-hub (400/500/850/950 µs, 12 repeats, no gap).
+  // Static buffer avoids 2KB on async handler stack (stack overflow after reflash can break transmission).
+  // If it worked before and stopped after uploadfs: try Debug & settings → TX invert (0 vs 1); uploadfs wipes saved settings.
   server.on("/send-hub", HTTP_GET, [](AsyncWebServerRequest* req) {
     String cmd = req->hasParam("cmd") ? req->getParam("cmd")->value() : "light_toggle";
-    uint16_t pulses[HB_HUB_MAX_PULSES];
+    cmd.trim();
+    static uint16_t pulses[HB_HUB_MAX_PULSES];
     int n = 0;
-    if (cmd == "light_toggle") {
+    if (cmd.equals("light_toggle")) {
       n = harborBreezeHubLightTogglePulses(pulses, HB_HUB_MAX_PULSES);
-    } else if (cmd == "fan_off" || cmd == "fan_power") {
+    } else if (cmd.equals("fan_off") || cmd.equals("fan_power")) {
       n = harborBreezeHubFanPowerPulses(pulses, HB_HUB_MAX_PULSES);
     }
     if (n <= 0) {
@@ -245,7 +248,7 @@ void setup() {
       return;
     }
     sendPulses(pulses, n);
-    printf("[HB] Sent hub protocol: %s (%d pulses)\n", cmd.c_str(), n);
+    printf("[HB] Sent hub: %s (%d pulses)\n", cmd.c_str(), n);
     req->send(200, "application/json", "{\"ok\":true,\"cmd\":\"" + cmd + "\",\"protocol\":\"hub\"}");
   });
 
