@@ -1,0 +1,18 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build
+*.bin
+*.elf
+*.map
+
+# Secrets (never commit)
+.env
+.env.*
+
+# IDE & OS
+.DS_Store
+*.swp
+*~

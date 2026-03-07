@@ -1,0 +1,349 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --bg: #0f1419;
+  --surface: #1a2332;
+  --border: #2d3a4d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --primary: #58a6ff;
+  --primary-hover: #79b8ff;
+  --secondary: #30363d;
+  --secondary-hover: #484f58;
+  --fan-off: #f85149;
+  --radius: 12px;
+  --shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+}
+
+.panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn {
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--secondary);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover {
+  background: var(--secondary-hover);
+  border-color: var(--text-muted);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--bg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.btn-fan-off {
+  background: var(--fan-off);
+  border-color: var(--fan-off);
+  color: #fff;
+}
+
+.btn-fan-off:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.speed-row {
+  margin: 1rem 0;
+}
+
+.speed-row .label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.speed-btns {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.btn-speed {
+  min-width: 2.5rem;
+  padding: 0.5rem;
+}
+
+.footer {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-height: 1.2em;
+}
+
+.status.sent {
+  color: #3fb950;
+}
+
+.status.error {
+  color: var(--fan-off);
+}
+
+.panel-log .send-log {
+  max-height: 160px;
+  overflow-y: auto;
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.send-log:empty::before {
+  content: 'Sent commands will appear here.';
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.send-log-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.send-log-line-error {
+  color: var(--fan-off);
+}
+
+.ws-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  margin-left: 0.5rem;
+}
+
+.ws-connected {
+  background: #238636;
+  color: #fff;
+}
+
+.ws-disconnected {
+  background: var(--secondary);
+  color: var(--text-muted);
+}
+
+.rf-log-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.panel-rf-log .rf-log {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.rf-log:empty::before {
+  content: 'Received RF codes will appear here when the remote is used.';
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.rf-log-entry {
+  margin-bottom: 0.35rem;
+  word-break: break-all;
+}
+
+.rf-log-entry .rf-log-ts {
+  color: var(--text-muted);
+  margin-right: 0.35rem;
+}
+
+.rf-log-entry.rf-log-recognized .rf-log-msg {
+  color: #3fb950;
+}
+
+.rf-log-entry.rf-log-unknown .rf-log-msg {
+  color: var(--text-muted);
+}
+
+.rf-log-meta {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-left: 0.25rem;
+}
+
+.rf-log-raw {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+  margin-top: 0.15rem;
+}
+
+/* Debug & settings */
+.panel-debug {
+  margin-top: 1rem;
+}
+
+.panel-debug .debug-section {
+  margin-bottom: 1.25rem;
+}
+
+.panel-debug .debug-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.debug-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+
+.debug-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.debug-row label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.debug-select {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  min-width: 10rem;
+}
+
+.debug-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.debug-result {
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  font-size: 0.82rem;
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  background: var(--bg);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.debug-result p {
+  margin: 0 0 0.35rem;
+}
+
+.debug-result p:last-child {
+  margin-bottom: 0;
+}
+
+.debug-result-error {
+  border-color: var(--fan-off);
+  color: var(--fan-off);
+}
+
+.debug-sample {
+  word-break: break-all;
+  font-size: 0.78rem;
+  opacity: 0.95;
+}

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Harbor Breeze Fan</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>Harbor Breeze Fan</h1>
+      <p class="subtitle">315 MHz remote control</p>
+    </header>
+
+    <main class="main">
+      <section class="panel panel-light">
+        <h2>Light</h2>
+        <div class="btn-row">
+          <button type="button" class="btn btn-primary" data-cmd="light_toggle">Light On / Off</button>
+          <button type="button" class="btn btn-secondary" data-cmd="light_dim">Dim</button>
+        </div>
+      </section>
+
+      <section class="panel panel-fan">
+        <h2>Fan</h2>
+        <div class="btn-row">
+          <button type="button" class="btn btn-fan-off" data-cmd="fan_off">Off</button>
+        </div>
+        <div class="speed-row">
+          <span class="label">Speed</span>
+          <div class="speed-btns">
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_1">1</button>
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_2">2</button>
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_3">3</button>
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_4">4</button>
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_5">5</button>
+            <button type="button" class="btn btn-speed" data-cmd="fan_speed_6">6</button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" data-cmd="fan_direction_summer">Summer</button>
+          <button type="button" class="btn btn-secondary" data-cmd="fan_direction_winter">Winter</button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" data-cmd="nature_breeze">Nature Breeze</button>
+        </div>
+      </section>
+
+      <section class="panel panel-delay">
+        <h2>Delay off</h2>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" data-cmd="delay_off">Off</button>
+          <button type="button" class="btn btn-secondary" data-cmd="delay_2h">2 h</button>
+          <button type="button" class="btn btn-secondary" data-cmd="delay_4h">4 h</button>
+          <button type="button" class="btn btn-secondary" data-cmd="delay_8h">8 h</button>
+        </div>
+      </section>
+
+      <section class="panel panel-extras">
+        <h2>Extras</h2>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" data-cmd="home_shield">Home Shield</button>
+        </div>
+      </section>
+    </main>
+
+    <section class="panel panel-log">
+      <h2>Send log</h2>
+      <div id="send-log" class="send-log" aria-live="polite"></div>
+    </section>
+
+    <section class="panel panel-rf-log">
+      <h2>RF receive <span id="ws-status" class="ws-badge ws-disconnected">Disconnected</span></h2>
+      <p class="rf-log-hint">Point the remote at the receiver; received codes appear below in real time.</p>
+      <div id="rf-log" class="rf-log" aria-live="polite"></div>
+    </section>
+
+    <section class="panel panel-debug">
+      <h2>Debug &amp; settings</h2>
+      <div class="debug-section">
+        <h3 class="debug-heading">Transmitter</h3>
+        <div class="debug-row">
+          <label for="tx-invert">TX invert (active-low)</label>
+          <select id="tx-invert" class="debug-select" aria-label="TX invert: 0 = active-high, 1 = active-low">
+            <option value="0">0 (active-high)</option>
+            <option value="1" selected>1 (active-low)</option>
+          </select>
+        </div>
+        <p class="debug-hint">If the fan does not react, try flipping this. Many 315 MHz modules are active-low.</p>
+      </div>
+      <div class="debug-section">
+        <h3 class="debug-heading">Verify TX (receiver must be connected)</h3>
+        <div class="debug-row">
+          <label for="verify-cmd">Command</label>
+          <select id="verify-cmd" class="debug-select"></select>
+          <button type="button" id="btn-verify-tx" class="btn btn-secondary">Verify TX</button>
+        </div>
+        <div id="verify-tx-result" class="debug-result" aria-live="polite"></div>
+      </div>
+      <div class="debug-section">
+        <h3 class="debug-heading">Compare with physical remote (light)</h3>
+        <p class="debug-hint">1) Point the fan’s remote at the receiver. 2) Press <strong>Light On/Off</strong> once. 3) Click below to capture what the remote sent and compare to our expected light_toggle.</p>
+        <button type="button" id="btn-compare-remote" class="btn btn-primary">Capture remote &amp; compare (light_toggle)</button>
+        <div id="compare-remote-result" class="debug-result" aria-live="polite"></div>
+      </div>
+      <div class="debug-section">
+        <h3 class="debug-heading">Last RF capture</h3>
+        <button type="button" id="btn-last-rf" class="btn btn-secondary">Refresh last RF</button>
+        <div id="last-rf-result" class="debug-result" aria-live="polite"></div>
+      </div>
+      <div class="debug-section">
+        <h3 class="debug-heading">Expected pulses (no transmit)</h3>
+        <div class="debug-row">
+          <select id="debug-pulses-cmd" class="debug-select"></select>
+          <button type="button" id="btn-debug-pulses" class="btn btn-secondary">Get expected</button>
+        </div>
+        <div id="debug-pulses-result" class="debug-result" aria-live="polite"></div>
+      </div>
+      <div class="debug-section">
+        <h3 class="debug-heading">GPIO state</h3>
+        <button type="button" id="btn-debug-gpio" class="btn btn-secondary">Refresh GPIO</button>
+        <div id="debug-gpio-result" class="debug-result" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p id="status" class="status"></p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+  <script>
+    if (!window.appReady) {
+      var s = document.getElementById('status');
+      if (s) s.textContent = 'app.js did not load. Upload filesystem: pio run -t buildfs && pio run -t uploadfs';
+    }
+  </script>
+</body>
+</html>
