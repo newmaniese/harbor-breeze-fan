@@ -52,6 +52,18 @@ body {
   color: var(--text-muted);
 }
 
+.protocol-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  margin-left: 0.35rem;
+  background: #238636;
+  color: #fff;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+
 .main {
   flex: 1;
   display: flex;

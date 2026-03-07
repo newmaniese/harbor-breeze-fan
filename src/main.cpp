@@ -14,8 +14,8 @@
 #endif
 
 #define TX_PIN 6
-// Default: 1 = active-low (many 315 MHz modules). Overridable at runtime via GET/POST /settings.
-#define TX_INVERT_DEFAULT 1
+// Default: 0 = active-high (works with hub protocol for this fan). 1 = active-low. Overridable via Debug & settings.
+#define TX_INVERT_DEFAULT 0
 
 static int g_txInvert = TX_INVERT_DEFAULT;
 
@@ -118,7 +118,9 @@ static void handleRoot(AsyncWebServerRequest* req) {
     req->send(404, "text/plain", "index.html not found. Run: pio run -t buildfs && pio run -t uploadfs");
     return;
   }
-  req->send(LittleFS, "/index.html", "text/html");
+  AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/index.html", "text/html");
+  resp->addHeader("Cache-Control", "no-cache, must-revalidate");
+  req->send(resp);
 }
 
 static void handleLastRf(AsyncWebServerRequest* req) {
@@ -178,7 +180,7 @@ static void handleAppJs(AsyncWebServerRequest* req) {
     return;
   }
   AsyncWebServerResponse* resp = req->beginResponse(LittleFS, "/app.js", "application/javascript");
-  resp->addHeader("Cache-Control", "max-age=86400");
+  resp->addHeader("Cache-Control", "no-cache, must-revalidate");
   req->send(resp);
 }
 
@@ -240,11 +242,25 @@ void setup() {
     int n = 0;
     if (cmd.equals("light_toggle")) {
       n = harborBreezeHubLightTogglePulses(pulses, HB_HUB_MAX_PULSES);
+    } else if (cmd.equals("light_dim")) {
+      n = harborBreezeHubLightDimPulses(pulses, HB_HUB_MAX_PULSES);
     } else if (cmd.equals("fan_off") || cmd.equals("fan_power")) {
       n = harborBreezeHubFanPowerPulses(pulses, HB_HUB_MAX_PULSES);
+    } else if (cmd.equals("fan_speed_1")) n = harborBreezeHubFanSpeedPulses(1, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_2")) n = harborBreezeHubFanSpeedPulses(2, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_3")) n = harborBreezeHubFanSpeedPulses(3, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_4")) n = harborBreezeHubFanSpeedPulses(4, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_5")) n = harborBreezeHubFanSpeedPulses(5, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("fan_speed_6")) n = harborBreezeHubFanSpeedPulses(6, pulses, HB_HUB_MAX_PULSES);
+    else if (cmd.equals("nature_breeze")) {
+      n = harborBreezeHubBreezePulses(pulses, HB_HUB_MAX_PULSES);
+    } else if (cmd.equals("fan_direction_summer")) {
+      n = harborBreezeHubRotateCcwPulses(pulses, HB_HUB_MAX_PULSES);
+    } else if (cmd.equals("fan_direction_winter")) {
+      n = harborBreezeHubRotateCwPulses(pulses, HB_HUB_MAX_PULSES);
     }
     if (n <= 0) {
-      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Hub protocol: use cmd=light_toggle or cmd=fan_off\"}");
+      req->send(400, "application/json", "{\"ok\":false,\"error\":\"Hub: unknown cmd. Use light_toggle, light_dim, fan_off, fan_speed_1..6, nature_breeze, fan_direction_summer, fan_direction_winter\"}");
       return;
     }
     sendPulses(pulses, n);

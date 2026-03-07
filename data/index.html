@@ -10,7 +10,7 @@
   <div class="app">
     <header class="header">
       <h1>Harbor Breeze Fan</h1>
-      <p class="subtitle">315 MHz remote control</p>
+      <p class="subtitle">315 MHz remote control <span class="protocol-badge" title="Uses hub protocol">hub</span></p>
     </header>
 
     <main class="main">
@@ -81,13 +81,13 @@
       <div class="debug-section">
         <h3 class="debug-heading">Transmitter</h3>
         <div class="debug-row">
-          <label for="tx-invert">TX invert (active-low)</label>
+          <label for="tx-invert">TX invert</label>
           <select id="tx-invert" class="debug-select" aria-label="TX invert: 0 = active-high, 1 = active-low">
-            <option value="0">0 (active-high)</option>
-            <option value="1" selected>1 (active-low)</option>
+            <option value="0" selected>0 (active-high)</option>
+            <option value="1">1 (active-low)</option>
           </select>
         </div>
-        <p class="debug-hint">If the fan does not react, try flipping this. Many 315 MHz modules are active-low.</p>
+        <p class="debug-hint">If the fan does not react, try flipping this. Default is 0 (active-high) for hub protocol.</p>
       </div>
       <div class="debug-section">
         <h3 class="debug-heading">Verify TX (receiver must be connected)</h3>
@@ -128,7 +128,7 @@
       <p id="status" class="status"></p>
     </footer>
   </div>
-  <script src="app.js"></script>
+  <script src="app.js?v=hub"></script>
   <script>
     if (!window.appReady) {
       var s = document.getElementById('status');

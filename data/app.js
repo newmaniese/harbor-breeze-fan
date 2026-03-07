@@ -50,21 +50,22 @@
     rfLogEl.scrollTop = rfLogEl.scrollHeight;
   }
 
+  // Hub protocol commands (same protocol that works with the fan). Others use legacy POST /send.
+  var hubCommands = ['light_toggle', 'light_dim', 'fan_off', 'fan_speed_1', 'fan_speed_2', 'fan_speed_3', 'fan_speed_4', 'fan_speed_5', 'fan_speed_6', 'nature_breeze', 'fan_direction_summer', 'fan_direction_winter'];
+
   function sendCommand(cmd) {
     setStatus('Sending…');
-    var opts = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cmd: cmd })
-    };
-    fetch('/send', opts)
+    var useHub = hubCommands.indexOf(cmd) >= 0;
+    var url = useHub ? ('/send-hub?cmd=' + encodeURIComponent(cmd)) : '/send';
+    var opts = useHub ? { method: 'GET' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: cmd }) };
+    fetch(url, opts)
       .then(function (r) {
-        if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + (t || r.statusText)); });
+        if (!r.ok) return r.json().then(function (d) { throw new Error((d && d.error) ? d.error : r.status + ''); }).catch(function () { throw new Error(r.status + ''); });
         return r.json();
       })
       .then(function (data) {
         if (data && data.ok) {
-          setStatus('Sent: ' + data.cmd, 'sent');
+          setStatus('Sent: ' + data.cmd + (data.protocol === 'hub' ? ' (hub)' : ''), 'sent');
           appendLog(data.cmd, true);
         } else {
           var err = (data && data.error) ? data.error : 'unknown';
@@ -73,7 +74,7 @@
         }
       })
       .catch(function (err) {
-        setStatus('Request failed', 'error');
+        setStatus('Request failed: ' + (err.message || ''), 'error');
         appendLog('Request failed', false);
       });
   }

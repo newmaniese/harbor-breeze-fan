@@ -64,11 +64,15 @@ int harborBreezeCommandPulses(const char* func8, uint16_t* out, int maxOut);
 // One frame = 25 symbol pairs = 50 timings; 12 repeats = 600.
 #define HB_HUB_MAX_PULSES 1024
 
-// Build hub-format pulses for "light toggle" (remote "0" + light power). Returns pulse count.
-// Out buffer must hold at least HB_HUB_MAX_PULSES (1024).
-int harborBreezeHubLightTogglePulses(uint16_t* out, int maxOut);
+// Build hub-format pulses for remote "0" + 10-symbol command. Out must hold HB_HUB_MAX_PULSES.
+int harborBreezeHubCommandPulses(const char* cmd10[10], uint16_t* out, int maxOut);
 
-// Build hub-format pulses for "fan on/off" (remote "0" + fan power). Returns pulse count.
+int harborBreezeHubLightTogglePulses(uint16_t* out, int maxOut);
+int harborBreezeHubLightDimPulses(uint16_t* out, int maxOut);
 int harborBreezeHubFanPowerPulses(uint16_t* out, int maxOut);
+int harborBreezeHubFanSpeedPulses(int speed, uint16_t* out, int maxOut);  // speed 1..6
+int harborBreezeHubBreezePulses(uint16_t* out, int maxOut);
+int harborBreezeHubRotateCcwPulses(uint16_t* out, int maxOut);   // summer
+int harborBreezeHubRotateCwPulses(uint16_t* out, int maxOut);   // winter
 
 #endif // HARBOR_BREEZE_H
