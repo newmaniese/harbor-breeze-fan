@@ -70,51 +70,51 @@ int harborBreezeHubCommandPulses(const char* cmd10[10], uint16_t* out, int maxOu
   return idx;
 }
 
-static const char* HUB_LIGHT_POWER[] = { "SL","SL","SS","LS","LL","SS","LL","SS","LL","SR" };
-static const char* HUB_LIGHT_DIM[]   = { "LL","SS","LL","SS","LL","SS","LL","SS","LL","SR" };
-static const char* HUB_FAN_POWER[]  = { "LL","SS","LS","LS","LS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_1[] = { "LL","SL","SS","LS","LS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_2[] = { "LL","SS","LL","SS","LS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_3[] = { "LL","SL","SL","SS","LS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_4[] = { "LL","SS","LS","LL","SS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_5[] = { "LL","SL","SS","LL","SS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_SPEED_6[] = { "LL","SS","LL","SL","SS","LS","LL","SS","LL","SR" };
-static const char* HUB_FAN_BREEZE[]  = { "LL","SL","SL","SL","SS","LS","LL","SS","LL","SR" };
-static const char* HUB_ROTATE_CCW[] = { "LL","SS","LS","LS","LL","SS","LL","SS","LL","SR" };
-static const char* HUB_ROTATE_CW[]  = { "LL","SS","LS","LS","LL","SL","SL","SS","LL","SR" };
-// Home Shield (away mode). If your fan doesn't respond, capture remote Home Shield, use Decode last capture as Hub, and replace with the 10 command symbols (last 10 of the 25).
-static const char* HUB_HOME_SHIELD[] = { "SL","SL","SL","SS","LS","LS","LL","SR","SL","SL" };
+// Single source of truth for hub commands (10 symbols each). Used for both encode and decode.
+static const struct {
+  const char* name;
+  const char* syms[10];
+} HUB_CMDS[] = {
+  { "light_toggle",       { "SL","SL","SS","LS","LL","SS","LL","SS","LL","SR" } },
+  { "light_dim",          { "LL","SS","LL","SS","LL","SS","LL","SS","LL","SR" } },
+  { "fan_off",            { "LL","SS","LS","LS","LS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_1",        { "LL","SL","SS","LS","LS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_2",        { "LL","SS","LL","SS","LS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_3",        { "LL","SL","SL","SS","LS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_4",        { "LL","SS","LS","LL","SS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_5",        { "LL","SL","SS","LL","SS","LS","LL","SS","LL","SR" } },
+  { "fan_speed_6",        { "LL","SS","LL","SL","SS","LS","LL","SS","LL","SR" } },
+  { "nature_breeze",      { "LL","SL","SL","SL","SS","LS","LL","SS","LL","SR" } },
+  { "fan_direction_summer", { "LL","SS","LS","LS","LL","SS","LL","SS","LL","SR" } },
+  { "fan_direction_winter", { "LL","SS","LS","LS","LL","SL","SL","SS","LL","SR" } },
+  { "home_shield",        { "SL","SL","SL","SS","LS","LS","LL","SR","SL","SL" } },
+};
+static const int HUB_CMD_COUNT = (int)(sizeof(HUB_CMDS) / sizeof(HUB_CMDS[0]));
 
 int harborBreezeHubLightTogglePulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_LIGHT_POWER, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[0].syms, out, maxOut);
 }
 int harborBreezeHubLightDimPulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_LIGHT_DIM, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[1].syms, out, maxOut);
 }
 int harborBreezeHubFanPowerPulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_FAN_POWER, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[2].syms, out, maxOut);
 }
 int harborBreezeHubFanSpeedPulses(int speed, uint16_t* out, int maxOut) {
-  const char** cmd = nullptr;
-  if (speed == 1) cmd = HUB_FAN_SPEED_1;
-  else if (speed == 2) cmd = HUB_FAN_SPEED_2;
-  else if (speed == 3) cmd = HUB_FAN_SPEED_3;
-  else if (speed == 4) cmd = HUB_FAN_SPEED_4;
-  else if (speed == 5) cmd = HUB_FAN_SPEED_5;
-  else if (speed == 6) cmd = HUB_FAN_SPEED_6;
-  return cmd ? harborBreezeHubCommandPulses(cmd, out, maxOut) : 0;
+  if (speed < 1 || speed > 6) return 0;
+  return harborBreezeHubCommandPulses(HUB_CMDS[2 + speed].syms, out, maxOut);
 }
 int harborBreezeHubBreezePulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_FAN_BREEZE, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[9].syms, out, maxOut);
 }
 int harborBreezeHubRotateCcwPulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_ROTATE_CCW, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[10].syms, out, maxOut);
 }
 int harborBreezeHubRotateCwPulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_ROTATE_CW, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[11].syms, out, maxOut);
 }
 int harborBreezeHubHomeShieldPulses(uint16_t* out, int maxOut) {
-  return harborBreezeHubCommandPulses(HUB_HOME_SHIELD, out, maxOut);
+  return harborBreezeHubCommandPulses(HUB_CMDS[12].syms, out, maxOut);
 }
 
 // --- Hub decode: classify (on_us, off_us) pairs into SS, SL, LL, LS, SR (tolerance ±150 µs, REST ±2000). ---
@@ -131,28 +131,6 @@ static bool hubPairToSymbol(uint16_t on_us, uint16_t off_us, char* out) {
   if (near(on_us, 400, HUB_TOL) && off_us >= (uint16_t)HUB_REST_MIN && off_us <= (uint16_t)HUB_REST_MAX) { out[0] = 'S'; out[1] = 'R'; out[2] = '\0'; return true; }
   return false;
 }
-
-// Known hub commands for matching (10 symbols each). Order must match the command names below.
-static const char* const HUB_CMD_SYMS[][10] = {
-  { "SL","SL","SS","LS","LL","SS","LL","SS","LL","SR" },   // light_toggle
-  { "LL","SS","LL","SS","LL","SS","LL","SS","LL","SR" },   // light_dim
-  { "LL","SS","LS","LS","LS","LS","LL","SS","LL","SR" },   // fan_off
-  { "LL","SL","SS","LS","LS","LS","LL","SS","LL","SR" },   // fan_speed_1
-  { "LL","SS","LL","SS","LS","LS","LL","SS","LL","SR" },   // fan_speed_2
-  { "LL","SL","SL","SS","LS","LS","LL","SS","LL","SR" },   // fan_speed_3
-  { "LL","SS","LS","LL","SS","LS","LL","SS","LL","SR" },   // fan_speed_4
-  { "LL","SL","SS","LL","SS","LS","LL","SS","LL","SR" },   // fan_speed_5
-  { "LL","SS","LL","SL","SS","LS","LL","SS","LL","SR" },   // fan_speed_6
-  { "LL","SL","SL","SL","SS","LS","LL","SS","LL","SR" },   // nature_breeze
-  { "LL","SS","LS","LS","LL","SS","LL","SS","LL","SR" },   // fan_direction_summer
-  { "LL","SS","LS","LS","LL","SL","SL","SS","LL","SR" },   // fan_direction_winter
-  { "SL","SL","LL","SS","LS","LL","SS","LL","LL","SR" },   // home_shield
-};
-static const char* const HUB_CMD_NAMES[] = {
-  "light_toggle", "light_dim", "fan_off", "fan_speed_1", "fan_speed_2", "fan_speed_3",
-  "fan_speed_4", "fan_speed_5", "fan_speed_6", "nature_breeze", "fan_direction_summer", "fan_direction_winter", "home_shield"
-};
-static const int HUB_CMD_COUNT = sizeof(HUB_CMD_NAMES) / sizeof(HUB_CMD_NAMES[0]);
 
 int harborBreezeHubDecodePulses(const uint16_t* pulses, int len, char* symbols_buf, size_t buf_sz, const char** matched_cmd) {
   if (!pulses || len < 50 || !symbols_buf || buf_sz < 80) return 0;
@@ -176,8 +154,8 @@ int harborBreezeHubDecodePulses(const uint16_t* pulses, int len, char* symbols_b
     for (int c = 0; c < HUB_CMD_COUNT && matched_cmd; c++) {
       bool match = true;
       for (int j = 0; j < 10 && match; j++)
-        match = (syms[15 + j][0] == HUB_CMD_SYMS[c][j][0] && syms[15 + j][1] == HUB_CMD_SYMS[c][j][1]);
-      if (match) { *matched_cmd = HUB_CMD_NAMES[c]; break; }
+        match = (syms[15 + j][0] == HUB_CMDS[c].syms[j][0] && syms[15 + j][1] == HUB_CMDS[c].syms[j][1]);
+      if (match) { *matched_cmd = HUB_CMDS[c].name; break; }
     }
     return 25;
   }
