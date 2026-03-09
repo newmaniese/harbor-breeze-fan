@@ -10,7 +10,12 @@
 
 # Secrets (never commit)
 .env
-.env.*
+.env.local
+.env.*.local
+
+# User/device data and IDE (do not publish)
+frame.json
+.cursor/
 
 # IDE & OS
 .DS_Store
