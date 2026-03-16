@@ -6,7 +6,9 @@
 #include <Preferences.h>
 #include <time.h>
 #include "harbor_breeze.h"
+#ifndef TRANSCEIVER_ONLY
 #include "rf_capture.h"
+#endif
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "your-ssid"
@@ -244,6 +246,7 @@ static void handleRoot(AsyncWebServerRequest* req) {
   req->send(resp);
 }
 
+#ifndef TRANSCEIVER_ONLY
 static void handleLastRf(AsyncWebServerRequest* req) {
   JsonDocument doc;
   doc["seq"] = rfCaptureGetLastSeq();
@@ -284,6 +287,7 @@ static void handleLastRfEvent(AsyncWebServerRequest* req) {
   serializeJson(doc, out);
   req->send(200, "application/json", out);
 }
+#endif
 
 static void handleAppCss(AsyncWebServerRequest* req) {
   if (!LittleFS.exists("/app.css")) {
@@ -383,8 +387,12 @@ void setup() {
     }
   }
 
+#ifndef TRANSCEIVER_ONLY
   rfCaptureBegin();
   printf("[HB] RF receive on GPIO 5 (point remote and press a button, then GET /last-rf)\n");
+#else
+  printf("[HB] Transceiver-only build: no receiver (GPIO 5 unused)\n");
+#endif
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -422,6 +430,18 @@ void setup() {
     req->send(200, "text/plain", WiFi.localIP().toString());
   });
 
+  server.on("/config", HTTP_GET, [](AsyncWebServerRequest* req) {
+    JsonDocument doc;
+#ifdef TRANSCEIVER_ONLY
+    doc["transceiver_only"] = true;
+#else
+    doc["transceiver_only"] = false;
+#endif
+    String out;
+    serializeJson(doc, out);
+    req->send(200, "application/json", out);
+  });
+
   // Hub protocol: same as github.com/enlilodisho/harbor-breeze-hub (400/500/850/950 µs, 12 repeats, no gap).
   // Static buffer avoids 2KB on async handler stack (stack overflow after reflash can break transmission).
   // If it worked before and stopped after uploadfs: try Debug & settings → TX invert (0 vs 1); uploadfs wipes saved settings.
@@ -452,6 +472,10 @@ void setup() {
       bool raw = req->hasParam("raw") && req->getParam("raw")->value().toInt() == 1;
       bool useLearned = req->hasParam("learned") && req->getParam("learned")->value().toInt() == 1;
       if (raw) {
+#ifdef TRANSCEIVER_ONLY
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Transceiver-only build: no receiver. Use learned=1 or restore Home Shield from backup.\"}");
+        return;
+#else
         static uint16_t rawCapBuf[RF_CAPTURE_MAX_PULSES];
         int capLen = rfCaptureGetLastPulses(rawCapBuf, RF_CAPTURE_MAX_PULSES);
         if (capLen < HOME_SHIELD_MIN_PULSES) {
@@ -465,6 +489,7 @@ void setup() {
         for (int r = 0; r < reps && n + capLen <= HB_HUB_MAX_PULSES; r++)
           for (int i = 0; i < capLen; i++) pulses[n++] = rawCapBuf[i];
         if (n == 0) { req->send(500, "application/json", "{\"ok\":false,\"error\":\"Raw build failed\"}"); return; }
+#endif
       } else if (useLearned && homeShieldLearned()) {
         bool useGap = req->hasParam("gap") && req->getParam("gap")->value().toInt() == 1;
         n = homeShieldBuildPulsesEx(pulses, HB_HUB_MAX_PULSES, useGap);
@@ -553,6 +578,7 @@ void setup() {
     req->send(200, "application/json", out);
   });
 
+#ifndef TRANSCEIVER_ONLY
   // Learn Home Shield from last RF capture (20–50 pulses). Call after pressing remote's Home Shield and refreshing last RF.
   server.on("/learn-home-shield", HTTP_POST, [](AsyncWebServerRequest* req) {
     uint16_t pulses[RF_CAPTURE_MAX_PULSES];
@@ -582,6 +608,7 @@ void setup() {
     printf("[HB] Learned Home Shield from %d pulses\n", n);
     req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield learned. You can now use the Home Shield button.\"}");
   });
+#endif
 
   // Restore Home Shield from backup (e.g. after reflash). POST body: {"frame": [399, 655, 1046, ...]}
   server.on("/restore-home-shield", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
@@ -731,6 +758,7 @@ void setup() {
     req->send(200, "application/json", out);
   });
 
+#ifndef TRANSCEIVER_ONLY
   // Debug: return encoded pulse array for a command (no TX). Same JSON shape as irproject /last-rf for comparison.
   server.on("/last-rf", HTTP_GET, handleLastRf);
   server.on("/last-rf-event", HTTP_GET, handleLastRfEvent);
@@ -754,6 +782,7 @@ void setup() {
     serializeJson(doc, out);
     req->send(200, "application/json", out);
   });
+#endif
 
   // Debug: show what preamble and function we're using
   server.on("/debug-code", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -885,6 +914,7 @@ void setup() {
     req->send(200, "application/json", out);
   });
 
+#ifndef TRANSCEIVER_ONLY
   // Decode last RF capture as hub protocol; return symbols and matched command name.
   server.on("/last-rf-decode-hub", HTTP_GET, [](AsyncWebServerRequest* req) {
     static uint16_t pulses[RF_CAPTURE_MAX_PULSES];
@@ -966,6 +996,7 @@ void setup() {
     serializeJson(doc, out);
     req->send(200, "application/json", out);
   });
+#endif
 
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
     JsonDocument doc;
@@ -1017,8 +1048,10 @@ void setup() {
     doc["tx_pin"] = TX_PIN;
     doc["tx_invert"] = g_txInvert;
     doc["tx_pin_state"] = digitalRead(TX_PIN);
+#ifndef TRANSCEIVER_ONLY
     doc["rx_pin"] = 5;
     doc["rx_pin_state"] = digitalRead(5);
+#endif
     doc["short_us"] = HB_SHORT_US;
     doc["long_us"] = HB_LONG_US;
     doc["gap_ms"] = HB_GAP_MS;
@@ -1061,6 +1094,7 @@ void setup() {
 }
 
 void loop() {
+#ifndef TRANSCEIVER_ONLY
   rfCaptureLoop();
 
   // Broadcast new RF over WebSocket with minimal payload (no pulse array) to reduce allocation and stack.
@@ -1093,6 +1127,7 @@ void loop() {
     }
     rfCaptureClearNew();  // Always clear, even if no WS clients
   }
+#endif
 
   static uint32_t lastStatusPrint = 0;
   if (millis() - lastStatusPrint >= 1000) {

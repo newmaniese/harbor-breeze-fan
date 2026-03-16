@@ -65,7 +65,7 @@ int harborBreezeCommandPulses(const char* func8, uint16_t* out, int maxOut);
 #define HB_HUB_MAX_PULSES 1024
 
 // Build hub-format pulses for remote "0" + 10-symbol command. Out must hold HB_HUB_MAX_PULSES.
-int harborBreezeHubCommandPulses(const char* cmd10[10], uint16_t* out, int maxOut);
+int harborBreezeHubCommandPulses(const char* const cmd10[10], uint16_t* out, int maxOut);
 
 int harborBreezeHubLightTogglePulses(uint16_t* out, int maxOut);
 int harborBreezeHubLightDimPulses(uint16_t* out, int maxOut);

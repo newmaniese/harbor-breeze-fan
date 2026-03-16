@@ -1,4 +1,8 @@
 (function () {
+  fetch('/config').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (d && d.transceiver_only) document.body.classList.add('transceiver-only');
+  }).catch(function () {});
+
   function setResult(id, html, isError) {
     var el = document.getElementById(id);
     if (!el) return;

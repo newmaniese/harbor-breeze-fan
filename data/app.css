@@ -25,6 +25,11 @@ body {
   line-height: 1.5;
 }
 
+/* Transceiver-only build: hide receiver-related UI (learn from remote, verify TX, last RF, etc.) */
+body.transceiver-only .receiver-only {
+  display: none !important;
+}
+
 .app {
   max-width: 420px;
   margin: 0 auto;

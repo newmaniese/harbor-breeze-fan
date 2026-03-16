@@ -22,7 +22,7 @@
     </header>
 
     <main class="main">
-      <section class="panel panel-debug">
+      <section class="panel panel-debug receiver-only">
         <h2>Verify TX (receiver must be connected)</h2>
         <div class="debug-row">
           <label for="verify-cmd">Command</label>
@@ -32,14 +32,14 @@
         <div id="verify-tx-result" class="debug-result" aria-live="polite"></div>
       </section>
 
-      <section class="panel panel-debug">
+      <section class="panel panel-debug receiver-only">
         <h2>Compare with physical remote (light)</h2>
         <p class="debug-hint">1) Point the fan’s remote at the receiver. 2) Press <strong>Light On/Off</strong> once. 3) Click below.</p>
         <button type="button" id="btn-compare-remote" class="btn btn-primary">Capture remote &amp; compare (light_toggle)</button>
         <div id="compare-remote-result" class="debug-result" aria-live="polite"></div>
       </section>
 
-      <section class="panel panel-debug">
+      <section class="panel panel-debug receiver-only">
         <h2>Figure out Hub codes</h2>
         <p class="debug-hint">Point the remote at the receiver, press a button (e.g. Light), then click <strong>Refresh last RF</strong> below so the next decode/compare uses that capture. Decode shows the hub symbol sequence and whether it matches our commands.</p>
         <div class="debug-row">
@@ -49,7 +49,7 @@
         <div id="decode-hub-result" class="debug-result" aria-live="polite"></div>
       </section>
 
-      <section class="panel panel-debug">
+      <section class="panel panel-debug receiver-only">
         <h2>Last RF capture</h2>
         <button type="button" id="btn-last-rf" class="btn btn-secondary">Refresh last RF</button>
         <div id="last-rf-result" class="debug-result" aria-live="polite"></div>
@@ -72,9 +72,9 @@
 
       <section class="panel panel-debug">
         <h2>Home Shield (hub)</h2>
-        <p class="debug-hint">Learn from your remote: 1) Press the remote’s <strong>Home Shield</strong> button. 2) Click <strong>Refresh last RF</strong> below. 3) Click below to save that capture. Then the Home Shield button on the main page will send it.</p>
+        <p class="debug-hint receiver-only">Learn from your remote: 1) Press the remote’s <strong>Home Shield</strong> button. 2) Click <strong>Refresh last RF</strong> below. 3) Click below to save that capture. Then the Home Shield button on the main page will send it.</p>
         <div class="debug-row">
-          <button type="button" id="btn-learn-home-shield" class="btn btn-primary">Use last capture as Home Shield</button>
+          <span class="receiver-only"><button type="button" id="btn-learn-home-shield" class="btn btn-primary">Use last capture as Home Shield</button></span>
           <button type="button" id="btn-home-shield" class="btn btn-secondary">Send Home Shield now</button>
         </div>
         <div id="home-shield-result" class="debug-result" aria-live="polite"></div>

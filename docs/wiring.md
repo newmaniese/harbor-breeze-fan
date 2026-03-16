@@ -80,10 +80,15 @@ For **ESP32-C3-DevKitM-1** (and ESP32-C3-MINI-1), GPIO 5 and GPIO 6 are appropri
 | Part | Role |
 |------|------|
 | ESP32-C3 (or compatible) | Board running the firmware |
-| 315 MHz transmitter (e.g. FS1000A) | RF send; DATA driven from GPIO 6 |
+| 315 MHz transmitter (e.g. FS1000A) | RF send; DATA driven from GPIO 6. Use good jumper wires—the transmitter is sensitive to bad or loose connections (see "Transmitter quality and wiring" below). |
 | 330 Ω resistor | Series: GPIO 6 → resistor → transmitter DATA |
 | 330–470 Ω resistor + LED (optional) | 5 V indicator: 5 V → resistor → LED → GND (see “Optional: 5 V indicator LED” below) |
-| Jumper wires | 5 V, GND, signal |
+| Jumper wires | 5 V, GND, signal — use solid connections; bad wires can make the transmitter fail. |
+
+## Transmitter quality and wiring
+
+- **Shorts out of the box:** A significant share of cheap 315 MHz transmitter modules are **shorted** (VCC to GND) when new. Before wiring, test with a multimeter in continuity mode: with the module **unplugged**, there should be **no beep** between VCC and GND. If it beeps, the module is bad—do not use it. Ordering a spare or two is recommended.
+- **Sensitive to bad wires:** The transmitter often fails or acts flaky with a poor GND or power connection (loose breadboard hole, broken strand, thin or long wire). If the transmitter doesn't work, try a **different GND wire** and a **different GND hole** on the common GND row before changing the circuit. Use short, solid jumpers for VCC and GND.
 
 ## Antenna
 
@@ -111,6 +116,30 @@ To confirm that your external 5 V supply is on, add an LED and a **current-limit
 2. **5 V really on?** Confirm the adapter is plugged in and the same 5 V / GND rails power the transmitter. If the transmitter works when you send a command, 5 V is present — then the problem is only the LED circuit (polarity, loose wire, or bad LED).
 3. **Connections:** Check that the resistor and LED are in one path: 5 V → resistor → LED → GND with no loose jumps or wrong breadboard rows. A single break or wrong row will leave the LED off.
 4. **Try another LED or resistor:** Swap in a different LED (or temporarily try without the resistor for a **very short** test only — 5 V can kill an LED if left unregulated; one quick touch is sometimes used to verify polarity). Prefer flipping the LED first.
+
+## Single outlet, minimal footprint
+
+To run everything from **one wall plug** with a small setup:
+
+**What you need:** One 5 V USB adapter (2 A is plenty for one transmitter), **common GND** (ESP32 GND and transmitter GND on the same row—use a good wire; see troubleshooting if the transmitter is flaky), and the **transmitter 5 V from the adapter** (not from the ESP32’s 5 V pin).
+
+### Simplest: one cable + breakout
+
+1. **One USB cable** from the adapter to a **USB breakout** (exposes 5 V and GND).
+2. **Common GND:** One breadboard row for GND. Run breakout GND, ESP32 GND, and transmitter GND to that row (short, solid jumpers).
+3. **5 V:** From the breakout, run 5 V to the **ESP32** (e.g. power it via USB from a short cable off the breakout, or use the board’s 5 V/VIN if it has one). Run a **separate 5 V wire** from the breakout to the **transmitter VCC**. Do not connect transmitter VCC to the ESP32.
+4. **Signal:** GPIO 6 → 330 Ω → transmitter DATA.
+
+One plug, one cable, one breakout, two 5 V wires and one GND row.
+
+### Optional: bulk cap or filter
+
+If the ESP32 resets or USB drops when the transmitter keys, add a **100–470 µF** electrolytic across 5 V and GND at the breakout, and/or a **ferrite bead + 10–22 µF** on the transmitter VCC wire only. Often a good GND connection (and a decent 2 A adapter) is sufficient without these.
+
+### Minimal parts
+
+- 5 V 2 A USB wall adapter, one USB cable, one USB breakout.
+- Breadboard, ESP32, transmitter, 330 Ω, jumpers. Optional: ~25 cm wire on the transmitter antenna pad for range.
 
 ## Build
 
@@ -160,6 +189,18 @@ Confirm the module’s pins: **VCC**, **GND**, **DATA** (sometimes labeled **OUT
 ### 4. If the receiver must have 5 V
 
 If your module only works at 5 V and 3.3 V didn’t help, power it from a **separate** 5 V supply (e.g. another USB cable or 5 V adapter). Use a **common GND** between the ESP32 and the external supply (connect ESP32 GND to the external supply’s GND). Do not connect the external 5 V to the ESP32’s 5 V pin — only to the receiver’s VCC.
+
+## Troubleshooting: Transceiver doesn’t work with one GND wire but works with another
+
+If the transceiver fails when its GND is connected one way (e.g. a wire straight to the ESP32 GND) but **works when you change only that GND wire or where it plugs in** (same supply, same topology), the cause is likely the **connection**, not the circuit design.
+
+**Possible causes:**
+
+- **Bad or marginal wire:** The first wire may be faulty (high resistance, broken strand, corrosion, or a bad crimp). Try a **different GND wire** between the transceiver and the common GND row.
+- **Poor breadboard contact:** The hole or row you used first may have a loose or oxidized contact. Move the transceiver’s GND to a **different hole on the same GND row**, or to another GND row that’s jumpered to the same common GND.
+- **Thin or long wire:** A very thin or long wire can have enough resistance that when the transmitter draws current, the voltage drop makes the link unreliable. Use a **short, sturdy jumper** for the transceiver GND.
+
+So: **try a different GND wire and/or a different GND hole** before assuming you need a different power setup. Often that’s enough.
 
 ## Troubleshooting: Receiver not working after tying ground to ESP32
 

@@ -58,7 +58,7 @@ static void hubAppendSymbol(const char* sym, uint16_t* out, int* idx, int maxOut
 // Remote "0" = 15× SL. One frame = 15 + 10 = 25 symbol pairs = 50 timings.
 static const char* HUB_REMOTE0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
 
-int harborBreezeHubCommandPulses(const char* cmd10[10], uint16_t* out, int maxOut) {
+int harborBreezeHubCommandPulses(const char* const cmd10[10], uint16_t* out, int maxOut) {
   if (!out || !cmd10 || maxOut < 50 * HB_HUB_REPEATS) return 0;
   int idx = 0;
   for (int r = 0; r < HB_HUB_REPEATS && idx + 50 <= maxOut; r++) {

@@ -3,6 +3,14 @@
   var hubCommands = ['light_toggle', 'light_dim', 'fan_off', 'fan_speed_1', 'fan_speed_2', 'fan_speed_3', 'fan_speed_4', 'fan_speed_5', 'fan_speed_6', 'nature_breeze', 'fan_direction_summer', 'fan_direction_winter', 'home_shield'];
   var lastLightOn = false;
 
+  fetch('/config').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (d && d.transceiver_only) {
+      document.body.classList.add('transceiver-only');
+      var hint = document.querySelector('.transceiver-only-hint');
+      if (hint) hint.style.display = '';
+    }
+  }).catch(function () {});
+
   function setStatus(msg, className) {
     if (!statusEl) return;
     statusEl.textContent = msg;

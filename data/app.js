@@ -88,6 +88,11 @@
   });
 
   (function initRfLive() {
+    fetch('/config').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (d && d.transceiver_only) return;
+      startRfLive();
+    }).catch(function () { startRfLive(); });
+    function startRfLive() {
     var lastSeq = 0;
     function appendIfNew(d) {
       if (d.event !== 'rf' || !d.length) return;
@@ -131,6 +136,7 @@
         })
         .catch(function () { setWsStatus(false); });
     }, 2000);
+    }
   })();
 
   setStatus('Ready — tap a button to send');

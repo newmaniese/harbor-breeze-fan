@@ -9,8 +9,7 @@ Based on the protocol and codes from [harborBreeze315](https://github.com/bttnns
 - **ESP32-C3** (or compatible) dev board
 - **315 MHz transmitter** (e.g. FS1000A): VCC → 5 V, GND → GND, DATA ← GPIO 6 (via 330 Ω resistor)
 
-See [docs/wiring.md](docs/wiring.md) for full wiring.
-
+See [docs/wiring.md](docs/wiring.md) for full wiring. For **one plug and a small footprint**, see the “Single outlet, minimal footprint” section there. 
 ## Build and upload
 
 1. **WiFi:** Copy `.env.example` to `.env` and set your network credentials:
@@ -29,6 +28,16 @@ See [docs/wiring.md](docs/wiring.md) for full wiring.
    pio run -t buildfs
    pio run -t uploadfs
    ```
+
+   **Transceiver-only (production):** To build without the optional receiver (no GPIO 5, no learn-from-remote or Verify TX):
+
+   ```bash
+   pio run -e esp32c3_tx -t upload
+   pio run -t buildfs
+   pio run -t uploadfs
+   ```
+
+   The web UI will hide receiver-only features (learn Home Shield from remote, Verify TX, Last RF, etc.) and show only transceiver controls. Home Shield can still be used if you restore it from backup in Debug.
 
 3. Get the device IP: open the serial monitor (`pio device monitor`). On ESP32-C3, the board uses `printf()` for logging—you’ll see `[HB] IP: x.x.x.x` at boot and then every second. If you open the monitor after boot, wait 5–10 seconds for the heartbeat. Then visit **http://&lt;device-ip&gt;/** in a browser. You can also fetch **GET /ip** (e.g. from another device on the same network) to get the IP as plain text.
 
