@@ -208,18 +208,6 @@ static const char* findFunc(const char* cmd) {
 }
 
 static void sendPulses(uint16_t* pulses, int len) {
-  // #region agent log
-  uint32_t totalUs = 0;
-  for (int i = 0; i < len; i++) totalUs += pulses[i];
-  printf("[HB-DEBUG-79164a] sendPulses pin=%d len=%d totalUs=%lu short=%d long=%d\n",
-         TX_PIN, len, (unsigned long)totalUs, HB_SHORT_US, HB_LONG_US);
-  printf("[HB-DEBUG-79164a] first10: %u %u %u %u %u %u %u %u %u %u\n",
-         len > 0 ? pulses[0] : 0, len > 1 ? pulses[1] : 0,
-         len > 2 ? pulses[2] : 0, len > 3 ? pulses[3] : 0,
-         len > 4 ? pulses[4] : 0, len > 5 ? pulses[5] : 0,
-         len > 6 ? pulses[6] : 0, len > 7 ? pulses[7] : 0,
-         len > 8 ? pulses[8] : 0, len > 9 ? pulses[9] : 0);
-  // #endregion
   pinMode(TX_PIN, OUTPUT);
   digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
   bool high = true;
@@ -363,11 +351,6 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   printf("[HB] --- Harbor Breeze Fan Control boot ---\n");
-  // #region agent log
-  printf("[HB-DEBUG-79164a] TX_PIN=%d tx_invert=%d\n", TX_PIN, g_txInvert);
-  printf("[HB-DEBUG-79164a] Expected: short=%d long=%d gap=%d repeats=%d\n", HB_SHORT_US, HB_LONG_US, HB_GAP_MS, HB_REPEATS);
-  printf("[HB-DEBUG-79164a] Preamble DIP1=%s\n", HB_PREAMBLE_DIP1);
-  // #endregion
   pinMode(TX_PIN, OUTPUT);
   digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
 
@@ -699,9 +682,6 @@ void setup() {
     }
     uint16_t pulses[HB_MAX_PULSES];
     int n = harborBreezeCommandPulses(func, pulses, HB_MAX_PULSES);
-    // #region agent log
-    printf("[HB] GET /send cmd=%s func=%s n=%d\n", cmd.c_str(), func ? func : "null", n);
-    // #endregion
     if (n <= 0) {
       req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
       return;
@@ -735,9 +715,6 @@ void setup() {
       }
       uint16_t pulses[HB_MAX_PULSES];
       int n = harborBreezeCommandPulses(func, pulses, HB_MAX_PULSES);
-      // #region agent log
-      printf("[HB] POST /send cmd=%s func=%s n=%d\n", cmd ? cmd : "null", func ? func : "null", n);
-      // #endregion
       if (n <= 0) {
         req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
         return;
@@ -759,11 +736,10 @@ void setup() {
   });
 
 #ifndef TRANSCEIVER_ONLY
-  // Debug: return encoded pulse array for a command (no TX). Same JSON shape as irproject /last-rf for comparison.
+  // Debug: return encoded pulse array for a command (no TX). Same JSON shape as /last-rf for comparison.
   server.on("/last-rf", HTTP_GET, handleLastRf);
   server.on("/last-rf-event", HTTP_GET, handleLastRfEvent);
 
-  // #region agent log
   // Debug: replay the last captured RF signal (useful for testing if captured remote works)
   server.on("/replay-last-rf", HTTP_GET, [](AsyncWebServerRequest* req) {
     int len = rfCaptureGetLastLength();
@@ -773,7 +749,7 @@ void setup() {
     }
     static uint16_t pulses[RF_CAPTURE_MAX_PULSES];
     int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
-    printf("[HB-DEBUG-79164a] Replaying %d captured pulses\n", n);
+    printf("[HB] Replaying %d captured pulses\n", n);
     sendPulses(pulses, n);
     JsonDocument doc;
     doc["ok"] = true;
@@ -807,10 +783,9 @@ void setup() {
     doc["long_us"] = HB_LONG_US;
     String out;
     serializeJson(doc, out);
-    printf("[HB-DEBUG-79164a] /debug-code: %s\n", out.c_str());
     req->send(200, "application/json", out);
   });
-  
+
   // Debug: send raw pulses from JSON array - POST body: {"pulses": [940, 430, 940, 430, ...]}
   server.on("/send-raw", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
@@ -835,9 +810,9 @@ void setup() {
         if (n >= 512) break;
         pulses[n++] = v.as<uint16_t>();
       }
-      printf("[HB-DEBUG-79164a] Sending %d raw pulses\n", n);
+      printf("[HB] Sent %d raw pulses\n", n);
       sendPulses(pulses, n);
-      
+
       JsonDocument resp;
       resp["ok"] = true;
       resp["sent_pulses"] = n;
@@ -845,7 +820,6 @@ void setup() {
       serializeJson(resp, out);
       req->send(200, "application/json", out);
     });
-  // #endregion
 
   ws.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     if (type == WS_EVT_CONNECT) {
@@ -1041,7 +1015,6 @@ void setup() {
       req->send(400, "application/json", "{\"ok\":false,\"error\":\"tx_invert must be 0 or 1\"}");
     });
 
-  // #region agent log
   // Debug endpoint: shows GPIO states and config without transmitting
   server.on("/debug-gpio", HTTP_GET, [](AsyncWebServerRequest* req) {
     JsonDocument doc;
@@ -1059,10 +1032,9 @@ void setup() {
     doc["preamble"] = HB_PREAMBLE_DIP1;
     String out;
     serializeJson(doc, out);
-    printf("[HB-DEBUG-79164a] /debug-gpio: %s\n", out.c_str());
     req->send(200, "application/json", out);
   });
-  
+
   // Debug endpoint: toggle TX pin manually to test GPIO electrical connection
   // GET /debug-toggle-tx?state=1 sets HIGH, ?state=0 sets LOW
   server.on("/debug-toggle-tx", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -1074,7 +1046,7 @@ void setup() {
     pinMode(TX_PIN, OUTPUT);
     digitalWrite(TX_PIN, state);
     int readBack = digitalRead(TX_PIN);
-    printf("[HB-DEBUG-79164a] /debug-toggle-tx: set GPIO%d to %d, readback=%d\n", TX_PIN, state, readBack);
+    printf("[HB] debug-toggle-tx GPIO%d=%d readback=%d\n", TX_PIN, state, readBack);
     JsonDocument doc;
     doc["tx_pin"] = TX_PIN;
     doc["set_to"] = state;
@@ -1083,7 +1055,6 @@ void setup() {
     serializeJson(doc, out);
     req->send(200, "application/json", out);
   });
-  // #endregion
 
   server.onNotFound([](AsyncWebServerRequest* req) {
     req->send(404, "text/plain", "Not found");

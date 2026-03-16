@@ -16,7 +16,7 @@ See [docs/wiring.md](docs/wiring.md) for full wiring. For **one plug and a small
 
    ```bash
    cp .env.example .env
-   # Edit .env and set WIFI_SSID and WIFI_PASS (or copy from irproject/.env if you use the same)
+   # Edit .env and set WIFI_SSID and WIFI_PASS
    ```
 
    `.env` is gitignored. The build loads it automatically and injects the values into the firmware.
@@ -41,7 +41,7 @@ See [docs/wiring.md](docs/wiring.md) for full wiring. For **one plug and a small
 
 3. Get the device IP: open the serial monitor (`pio device monitor`). On ESP32-C3, the board uses `printf()` for logging—you’ll see `[HB] IP: x.x.x.x` at boot and then every second. If you open the monitor after boot, wait 5–10 seconds for the heartbeat. Then visit **http://&lt;device-ip&gt;/** in a browser. You can also fetch **GET /ip** (e.g. from another device on the same network) to get the IP as plain text.
 
-**If the page shows “app.js did not load” or the console shows WebSocket `/ws` or 404s for `/saved`, `/saved-rf`, `/last-rf`:** the device is serving a different project’s filesystem (e.g. from irproject). From this repo run `pio run -t buildfs` then `pio run -t uploadfs`, then hard-refresh the browser (Ctrl+Shift+R / Cmd+Shift+R). You should then see “Ready — tap a button to send” and the Harbor Breeze buttons only.
+**If the page shows “app.js did not load” or the console shows WebSocket `/ws` or 404s for `/saved`, `/saved-rf`, `/last-rf`:** the device is serving a different project’s filesystem. From this repo run `pio run -t buildfs` then `pio run -t uploadfs`, then hard-refresh the browser (Ctrl+Shift+R / Cmd+Shift+R). You should then see “Ready — tap a button to send” and the Harbor Breeze buttons only.
 
 ## Using on Android
 
