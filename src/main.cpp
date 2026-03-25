@@ -11,10 +11,10 @@
 #endif
 
 #ifndef WIFI_SSID
-#define WIFI_SSID "your-ssid"
+#error "WIFI_SSID is not defined. Please create a .env file from .env.example."
 #endif
 #ifndef WIFI_PASS
-#define WIFI_PASS "your-password"
+#error "WIFI_PASS is not defined. Please create a .env file from .env.example."
 #endif
 
 #define TX_PIN 6
