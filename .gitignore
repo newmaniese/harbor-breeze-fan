@@ -21,3 +21,4 @@ frame.json
 .DS_Store
 *.swp
 *~
+run_tests
