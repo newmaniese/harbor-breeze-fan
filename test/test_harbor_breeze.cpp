@@ -127,6 +127,48 @@ void test_harborBreezeBuildPulses_full_code() {
     ASSERT(out[11] == HB_GAP_MS * 1000, "Gap");
 }
 
+void test_harborBreezeCommandPulses_invalid_inputs() {
+    uint16_t out[HB_MAX_PULSES];
+    ASSERT(harborBreezeCommandPulses(NULL, out, HB_MAX_PULSES) == 0, "Should return 0 for NULL func8");
+    ASSERT(harborBreezeCommandPulses("01101010", NULL, HB_MAX_PULSES) == 0, "Should return 0 for NULL out");
+    ASSERT(harborBreezeCommandPulses("01101010", out, HB_MAX_PULSES - 1) == 0, "Should return 0 for maxOut < HB_MAX_PULSES");
+}
+
+void test_harborBreezeCommandPulses_invalid_length() {
+    uint16_t out[HB_MAX_PULSES];
+    ASSERT(harborBreezeCommandPulses("0110101", out, HB_MAX_PULSES) == 0, "Should return 0 for 7-char func8");
+    ASSERT(harborBreezeCommandPulses("011010100", out, HB_MAX_PULSES) == 0, "Should return 0 for 9-char func8");
+}
+
+void test_harborBreezeCommandPulses_valid_command() {
+    uint16_t out[HB_MAX_PULSES];
+    memset(out, 0, sizeof(out));
+
+    // HB_LIGHT_T = "01101010"
+    // HB_PREAMBLE_DIP1 = "00110000111111101"
+    // Combined = "00110000111111101" + "01101010" = "0011000011111110101101010" (25 bits)
+
+    int count = harborBreezeCommandPulses("01101010", out, HB_MAX_PULSES);
+
+    // initial (1) + 6 * (25 * 2) + 5 = 1 + 300 + 5 = 306
+    ASSERT(count == 306, "Valid command should produce 306 pulses");
+
+    ASSERT(out[0] == HB_LONG_US, "init");
+    // First bit of preamble is '0'
+    ASSERT(out[1] == HB_SHORT_US, "Preamble bit 0 HIGH");
+    ASSERT(out[2] == HB_LONG_US, "Preamble bit 0 LOW");
+
+    // Preamble is 17 bits.
+    // Bit 17 (first bit of func8) is index 17 in 0-indexed string.
+    // Pulse index = 1 + 17*2 = 35.
+    // func8[0] = '0'
+    ASSERT(out[35] == HB_SHORT_US, "Func bit 0 HIGH");
+    ASSERT(out[36] == HB_LONG_US, "Func bit 0 LOW");
+
+    // func8[1] = '1'
+    ASSERT(out[37] == HB_LONG_US, "Func bit 1 HIGH");
+    ASSERT(out[38] == HB_SHORT_US, "Func bit 1 LOW");
+}
 
 int main() {
     test_harborBreezeBuildPulses_invalid_inputs();
@@ -135,6 +177,10 @@ int main() {
     test_harborBreezeBuildPulses_buffer_limit();
     test_harborBreezeBuildPulses_maxOut_limit_during_gap();
     test_harborBreezeBuildPulses_full_code();
+
+    test_harborBreezeCommandPulses_invalid_inputs();
+    test_harborBreezeCommandPulses_invalid_length();
+    test_harborBreezeCommandPulses_valid_command();
 
     printf("All tests passed!\n");
     return 0;
