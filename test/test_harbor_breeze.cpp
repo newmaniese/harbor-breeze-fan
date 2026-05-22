@@ -127,6 +127,48 @@ void test_harborBreezeBuildPulses_full_code() {
     ASSERT(out[11] == HB_GAP_MS * 1000, "Gap");
 }
 
+void test_harborBreezeHubCommandPulses_invalid_inputs() {
+    uint16_t out[1024];
+    const char* cmd[10] = {"SS","SS","SS","SS","SS","SS","SS","SS","SS","SR"};
+
+    ASSERT(harborBreezeHubCommandPulses(NULL, out, 1024) == 0, "Should return 0 for NULL cmd10");
+    ASSERT(harborBreezeHubCommandPulses(cmd, NULL, 1024) == 0, "Should return 0 for NULL out");
+    // HB_HUB_REPEATS is 12. 50 * 12 = 600.
+    ASSERT(harborBreezeHubCommandPulses(cmd, out, 599) == 0, "Should return 0 for maxOut < 600");
+}
+
+void test_harborBreezeHubCommandPulses_basic() {
+    uint16_t out[1024];
+    memset(out, 0, sizeof(out));
+    // SS=400,500; SL=400,950; LL=850,950; LS=850,500; SR=400,10000
+    const char* cmd[10] = {"SS", "SL", "LL", "LS", "SR", "SS", "SL", "LL", "LS", "SR"};
+
+    int count = harborBreezeHubCommandPulses(cmd, out, 1024);
+    ASSERT(count == 600, "Total pulses should be 600 (50 * 12)");
+
+    // First 15 symbols (30 pulses) are HUB_REMOTE0 which is "SL" (400, 950)
+    for (int i = 0; i < 15; i++) {
+        ASSERT(out[i*2] == HB_HUB_SHORT_ON, "Remote0 pulse HIGH");
+        ASSERT(out[i*2 + 1] == HB_HUB_LONG_OFF, "Remote0 pulse LOW");
+    }
+
+    // Next 10 symbols (20 pulses) are from our cmd array
+    // 0: SS (400, 500)
+    ASSERT(out[30] == 400 && out[31] == 500, "Cmd[0] SS");
+    // 1: SL (400, 950)
+    ASSERT(out[32] == 400 && out[33] == 950, "Cmd[1] SL");
+    // 2: LL (850, 950)
+    ASSERT(out[34] == 850 && out[35] == 950, "Cmd[2] LL");
+    // 3: LS (850, 500)
+    ASSERT(out[36] == 850 && out[37] == 500, "Cmd[3] LS");
+    // 4: SR (400, 10000)
+    ASSERT(out[38] == 400 && out[39] == 10000, "Cmd[4] SR");
+
+    // Second repeat starts at index 50
+    ASSERT(out[50] == HB_HUB_SHORT_ON, "Repeat 2 start HIGH");
+    ASSERT(out[51] == HB_HUB_LONG_OFF, "Repeat 2 start LOW (SL)");
+}
+
 
 int main() {
     test_harborBreezeBuildPulses_invalid_inputs();
@@ -135,6 +177,9 @@ int main() {
     test_harborBreezeBuildPulses_buffer_limit();
     test_harborBreezeBuildPulses_maxOut_limit_during_gap();
     test_harborBreezeBuildPulses_full_code();
+
+    test_harborBreezeHubCommandPulses_invalid_inputs();
+    test_harborBreezeHubCommandPulses_basic();
 
     printf("All tests passed!\n");
     return 0;
