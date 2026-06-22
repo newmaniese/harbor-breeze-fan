@@ -46,13 +46,17 @@ int harborBreezeCommandPulses(const char* func8, uint16_t* out, int maxOut) {
 }
 
 // --- Hub protocol: symbol pairs (SS, SL, LL, LS, SR) → ON,OFF µs. First edge HIGH. ---
-static void hubAppendSymbol(const char* sym, uint16_t* out, int* idx, int maxOut) {
-  if (*idx + 2 > maxOut) return;
+static inline void hubAppendSymbolUnsafe(const char* sym, uint16_t* out, int* idx) {
   if (sym[0] == 'S' && sym[1] == 'S') { out[(*idx)++] = HB_HUB_SHORT_ON;  out[(*idx)++] = HB_HUB_SHORT_OFF; return; }
   if (sym[0] == 'S' && sym[1] == 'L') { out[(*idx)++] = HB_HUB_SHORT_ON;  out[(*idx)++] = HB_HUB_LONG_OFF;  return; }
   if (sym[0] == 'L' && sym[1] == 'L') { out[(*idx)++] = HB_HUB_LONG_ON;   out[(*idx)++] = HB_HUB_LONG_OFF;  return; }
   if (sym[0] == 'L' && sym[1] == 'S') { out[(*idx)++] = HB_HUB_LONG_ON;   out[(*idx)++] = HB_HUB_SHORT_OFF; return; }
   if (sym[0] == 'S' && sym[1] == 'R') { out[(*idx)++] = HB_HUB_SHORT_ON;  out[(*idx)++] = (uint16_t)HB_HUB_REST; return; }
+}
+
+static void hubAppendSymbol(const char* sym, uint16_t* out, int* idx, int maxOut) {
+  if (*idx + 2 > maxOut) return;
+  hubAppendSymbolUnsafe(sym, out, idx);
 }
 
 // Remote "0" = 15× SL. One frame = 15 + 10 = 25 symbol pairs = 50 timings.
@@ -62,10 +66,10 @@ int harborBreezeHubCommandPulses(const char* const cmd10[10], uint16_t* out, int
   if (!out || !cmd10 || maxOut < 50 * HB_HUB_REPEATS) return 0;
   int idx = 0;
   for (int r = 0; r < HB_HUB_REPEATS && idx + 50 <= maxOut; r++) {
-    for (int i = 0; i < 15 && idx + 2 <= maxOut; i++)
-      hubAppendSymbol(HUB_REMOTE0[i], out, &idx, maxOut);
-    for (int i = 0; i < 10 && idx + 2 <= maxOut; i++)
-      hubAppendSymbol(cmd10[i], out, &idx, maxOut);
+    for (int i = 0; i < 15; i++)
+      hubAppendSymbolUnsafe(HUB_REMOTE0[i], out, &idx);
+    for (int i = 0; i < 10; i++)
+      hubAppendSymbolUnsafe(cmd10[i], out, &idx);
   }
   return idx;
 }

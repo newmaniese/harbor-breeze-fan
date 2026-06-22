@@ -127,6 +127,67 @@ void test_harborBreezeBuildPulses_full_code() {
     ASSERT(out[11] == HB_GAP_MS * 1000, "Gap");
 }
 
+void test_harborBreezeCommandPulses_invalid_inputs() {
+    uint16_t out[HB_MAX_PULSES];
+    ASSERT(harborBreezeCommandPulses(NULL, out, HB_MAX_PULSES) == 0, "Should return 0 for NULL func8");
+    ASSERT(harborBreezeCommandPulses("01101010", NULL, HB_MAX_PULSES) == 0, "Should return 0 for NULL out");
+    ASSERT(harborBreezeCommandPulses("01101010", out, HB_MAX_PULSES - 1) == 0, "Should return 0 for maxOut < HB_MAX_PULSES");
+}
+
+void test_harborBreezeCommandPulses_invalid_length() {
+    uint16_t out[HB_MAX_PULSES];
+    ASSERT(harborBreezeCommandPulses("0110101", out, HB_MAX_PULSES) == 0, "Should return 0 for 7-char func8");
+    ASSERT(harborBreezeCommandPulses("011010100", out, HB_MAX_PULSES) == 0, "Should return 0 for 9-char func8");
+}
+
+void test_harborBreezeCommandPulses_valid_command() {
+    uint16_t out[HB_MAX_PULSES];
+    memset(out, 0, sizeof(out));
+
+    int count = harborBreezeCommandPulses("01101010", out, HB_MAX_PULSES);
+
+    ASSERT(count == 306, "Valid command should produce 306 pulses");
+
+    ASSERT(out[0] == HB_LONG_US, "init");
+    ASSERT(out[1] == HB_SHORT_US, "Preamble bit 0 HIGH");
+    ASSERT(out[2] == HB_LONG_US, "Preamble bit 0 LOW");
+    ASSERT(out[35] == HB_SHORT_US, "Func bit 0 HIGH");
+    ASSERT(out[36] == HB_LONG_US, "Func bit 0 LOW");
+    ASSERT(out[37] == HB_LONG_US, "Func bit 1 HIGH");
+    ASSERT(out[38] == HB_SHORT_US, "Func bit 1 LOW");
+}
+
+void test_harborBreezeHubCommandPulses_invalid_inputs() {
+    uint16_t out[1024];
+    const char* cmd[10] = {"SS","SS","SS","SS","SS","SS","SS","SS","SS","SR"};
+
+    ASSERT(harborBreezeHubCommandPulses(NULL, out, 1024) == 0, "Should return 0 for NULL cmd10");
+    ASSERT(harborBreezeHubCommandPulses(cmd, NULL, 1024) == 0, "Should return 0 for NULL out");
+    ASSERT(harborBreezeHubCommandPulses(cmd, out, 599) == 0, "Should return 0 for maxOut < 600");
+}
+
+void test_harborBreezeHubCommandPulses_basic() {
+    uint16_t out[1024];
+    memset(out, 0, sizeof(out));
+    const char* cmd[10] = {"SS", "SL", "LL", "LS", "SR", "SS", "SL", "LL", "LS", "SR"};
+
+    int count = harborBreezeHubCommandPulses(cmd, out, 1024);
+    ASSERT(count == 600, "Total pulses should be 600 (50 * 12)");
+
+    for (int i = 0; i < 15; i++) {
+        ASSERT(out[i*2] == HB_HUB_SHORT_ON, "Remote0 pulse HIGH");
+        ASSERT(out[i*2 + 1] == HB_HUB_LONG_OFF, "Remote0 pulse LOW");
+    }
+
+    ASSERT(out[30] == 400 && out[31] == 500, "Cmd[0] SS");
+    ASSERT(out[32] == 400 && out[33] == 950, "Cmd[1] SL");
+    ASSERT(out[34] == 850 && out[35] == 950, "Cmd[2] LL");
+    ASSERT(out[36] == 850 && out[37] == 500, "Cmd[3] LS");
+    ASSERT(out[38] == 400 && out[39] == 10000, "Cmd[4] SR");
+    ASSERT(out[50] == HB_HUB_SHORT_ON, "Repeat 2 start HIGH");
+    ASSERT(out[51] == HB_HUB_LONG_OFF, "Repeat 2 start LOW (SL)");
+}
+
 static void hubSymbolsToPulses(const char* const symbols[], int count, uint16_t* out, int* idx) {
     for (int i = 0; i < count; i++) {
         const char* sym = symbols[i];
@@ -241,6 +302,13 @@ int main() {
     test_harborBreezeBuildPulses_buffer_limit();
     test_harborBreezeBuildPulses_maxOut_limit_during_gap();
     test_harborBreezeBuildPulses_full_code();
+
+    test_harborBreezeCommandPulses_invalid_inputs();
+    test_harborBreezeCommandPulses_invalid_length();
+    test_harborBreezeCommandPulses_valid_command();
+
+    test_harborBreezeHubCommandPulses_invalid_inputs();
+    test_harborBreezeHubCommandPulses_basic();
 
     test_harborBreezeHubDecodePulses_basic();
     test_harborBreezeHubDecodePulses_leading_idle();
