@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <time.h>
+#include <functional>
 #include "harbor_breeze.h"
 #ifndef TRANSCEIVER_ONLY
 #include "rf_capture.h"
@@ -205,6 +206,29 @@ static const char* findFunc(const char* cmd) {
     if (strcmp(commands[i].name, cmd) == 0)
       return commands[i].func;
   return nullptr;
+}
+
+// Helper for JSON POST requests: handles chunk aggregation, parsing, and error reporting.
+static void handleJsonRequest(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total, std::function<void(JsonDocument&)> callback) {
+  if (index == 0) {
+    req->_tempObject = new String("");
+  }
+  String* body = (String*)req->_tempObject;
+  if (len) {
+    body->concat((const char*)data, len);
+  }
+  if (index + len != total) return;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, *body)) {
+    delete body;
+    req->_tempObject = nullptr;
+    req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
+    return;
+  }
+  callback(doc);
+  delete body;
+  req->_tempObject = nullptr;
 }
 
 static void sendPulses(uint16_t* pulses, int len) {
@@ -596,29 +620,22 @@ void setup() {
   // Restore Home Shield from backup (e.g. after reflash). POST body: {"frame": [399, 655, 1046, ...]}
   server.on("/restore-home-shield", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-      static String body;
-      if (index == 0) body = "";
-      if (len) body.concat((const char*)data, len);
-      if (index + len != total) return;
-      JsonDocument doc;
-      if (deserializeJson(doc, body)) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-      }
-      JsonArray arr = doc["frame"].as<JsonArray>();
-      if (arr.isNull() || arr.size() < (size_t)HOME_SHIELD_MIN_PULSES || arr.size() > (size_t)HOME_SHIELD_MAX_PULSES) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Need frame array with 20–50 numbers\"}");
-        return;
-      }
-      uint16_t frame[HOME_SHIELD_MAX_PULSES];
-      size_t n = arr.size();
-      for (size_t i = 0; i < n; i++) frame[i] = (uint16_t)arr[i].as<uint32_t>();
-      if (!homeShieldSaveFrameFromArray(frame, (int)n)) {
-        req->send(500, "application/json", "{\"ok\":false,\"error\":\"Restore failed\"}");
-        return;
-      }
-      printf("[HB] Restored Home Shield from backup (%zu pulses)\n", n);
-      req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield restored from backup.\"}");
+      handleJsonRequest(req, data, len, index, total, [req](JsonDocument& doc) {
+        JsonArray arr = doc["frame"].as<JsonArray>();
+        if (arr.isNull() || arr.size() < (size_t)HOME_SHIELD_MIN_PULSES || arr.size() > (size_t)HOME_SHIELD_MAX_PULSES) {
+          req->send(400, "application/json", "{\"ok\":false,\"error\":\"Need frame array with 20–50 numbers\"}");
+          return;
+        }
+        uint16_t frame[HOME_SHIELD_MAX_PULSES];
+        size_t n = arr.size();
+        for (size_t i = 0; i < n; i++) frame[i] = (uint16_t)arr[i].as<uint32_t>();
+        if (!homeShieldSaveFrameFromArray(frame, (int)n)) {
+          req->send(500, "application/json", "{\"ok\":false,\"error\":\"Restore failed\"}");
+          return;
+        }
+        printf("[HB] Restored Home Shield from backup (%zu pulses)\n", n);
+        req->send(200, "application/json", "{\"ok\":true,\"message\":\"Home Shield restored from backup.\"}");
+      });
     });
 
   server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -644,29 +661,21 @@ void setup() {
 
   server.on("/api/state", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-      static String body;
-      if (index == 0) body = "";
-      if (len) body.concat((const char*)data, len);
-      if (index + len != total) return;
-
-      JsonDocument doc;
-      if (deserializeJson(doc, body)) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-      }
-      if (doc["light_on"].is<bool>()) {
-        stateSetLight(doc["light_on"].as<bool>() ? 1 : 0);
-      }
-      if (doc["fan_speed"].is<int>()) {
-        int s = doc["fan_speed"].as<int>();
-        if (s >= 0 && s <= 6) stateSetSpeed(s);
-      }
-      const char* dir = doc["fan_direction"].as<const char*>();
-      if (dir) {
-        if (strcmp(dir, "winter") == 0) stateSetDirection(1);
-        else if (strcmp(dir, "summer") == 0) stateSetDirection(0);
-      }
-      req->send(200, "application/json", "{\"ok\":true}");
+      handleJsonRequest(req, data, len, index, total, [req](JsonDocument& doc) {
+        if (doc["light_on"].is<bool>()) {
+          stateSetLight(doc["light_on"].as<bool>() ? 1 : 0);
+        }
+        if (doc["fan_speed"].is<int>()) {
+          int s = doc["fan_speed"].as<int>();
+          if (s >= 0 && s <= 6) stateSetSpeed(s);
+        }
+        const char* dir = doc["fan_direction"].as<const char*>();
+        if (dir) {
+          if (strcmp(dir, "winter") == 0) stateSetDirection(1);
+          else if (strcmp(dir, "summer") == 0) stateSetDirection(0);
+        }
+        req->send(200, "application/json", "{\"ok\":true}");
+      });
     });
 
   server.on("/send", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -693,36 +702,28 @@ void setup() {
 
   server.on("/send", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-      static String body;
-      if (index == 0) body = "";
-      if (len) body.concat((const char*)data, len);
-      if (index + len != total) return;
-
-      JsonDocument doc;
-      if (deserializeJson(doc, body)) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-      }
-      const char* cmd = doc["cmd"].as<const char*>();
-      if (!cmd || !*cmd) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing cmd\"}");
-        return;
-      }
-      const char* func = findFunc(cmd);
-      if (!func) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Unknown command\"}");
-        return;
-      }
-      uint16_t pulses[HB_MAX_PULSES];
-      int n = harborBreezeCommandPulses(func, pulses, HB_MAX_PULSES);
-      if (n <= 0) {
-        req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
-        return;
-      }
-      sendPulses(pulses, n);
-      stateUpdateFromCmd(cmd);
-      printf("[HB] Sent %s (%d pulses)\n", cmd, n);
-      req->send(200, "application/json", "{\"ok\":true,\"cmd\":\"" + String(cmd) + "\"}");
+      handleJsonRequest(req, data, len, index, total, [req](JsonDocument& doc) {
+        const char* cmd = doc["cmd"].as<const char*>();
+        if (!cmd || !*cmd) {
+          req->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing cmd\"}");
+          return;
+        }
+        const char* func = findFunc(cmd);
+        if (!func) {
+          req->send(400, "application/json", "{\"ok\":false,\"error\":\"Unknown command\"}");
+          return;
+        }
+        uint16_t pulses[HB_MAX_PULSES];
+        int n = harborBreezeCommandPulses(func, pulses, HB_MAX_PULSES);
+        if (n <= 0) {
+          req->send(500, "application/json", "{\"ok\":false,\"error\":\"Encode failed\"}");
+          return;
+        }
+        sendPulses(pulses, n);
+        stateUpdateFromCmd(cmd);
+        printf("[HB] Sent %s (%d pulses)\n", cmd, n);
+        req->send(200, "application/json", "{\"ok\":true,\"cmd\":\"" + String(cmd) + "\"}");
+      });
     });
 
   server.on("/commands", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -789,36 +790,28 @@ void setup() {
   // Debug: send raw pulses from JSON array - POST body: {"pulses": [940, 430, 940, 430, ...]}
   server.on("/send-raw", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-      static String body;
-      if (index == 0) body = "";
-      if (len) body.concat((const char*)data, len);
-      if (index + len != total) return;
+      handleJsonRequest(req, data, len, index, total, [req](JsonDocument& doc) {
+        JsonArray arr = doc["pulses"].as<JsonArray>();
+        if (arr.isNull() || arr.size() == 0) {
+          req->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing pulses array\"}");
+          return;
+        }
+        static uint16_t pulses[512];
+        int n = 0;
+        for (JsonVariant v : arr) {
+          if (n >= 512) break;
+          pulses[n++] = v.as<uint16_t>();
+        }
+        printf("[HB] Sent %d raw pulses\n", n);
+        sendPulses(pulses, n);
 
-      JsonDocument doc;
-      if (deserializeJson(doc, body)) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-      }
-      JsonArray arr = doc["pulses"].as<JsonArray>();
-      if (arr.isNull() || arr.size() == 0) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Missing pulses array\"}");
-        return;
-      }
-      static uint16_t pulses[512];
-      int n = 0;
-      for (JsonVariant v : arr) {
-        if (n >= 512) break;
-        pulses[n++] = v.as<uint16_t>();
-      }
-      printf("[HB] Sent %d raw pulses\n", n);
-      sendPulses(pulses, n);
-
-      JsonDocument resp;
-      resp["ok"] = true;
-      resp["sent_pulses"] = n;
-      String out;
-      serializeJson(resp, out);
-      req->send(200, "application/json", out);
+        JsonDocument resp;
+        resp["ok"] = true;
+        resp["sent_pulses"] = n;
+        String out;
+        serializeJson(resp, out);
+        req->send(200, "application/json", out);
+      });
     });
 
   ws.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
@@ -982,37 +975,29 @@ void setup() {
 
   server.on("/settings", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
     [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
-      static String body;
-      if (index == 0) body = "";
-      if (len) body.concat((const char*)data, len);
-      if (index + len != total) return;
-
-      JsonDocument doc;
-      if (deserializeJson(doc, body)) {
-        req->send(400, "application/json", "{\"ok\":false,\"error\":\"Invalid JSON\"}");
-        return;
-      }
-      if (doc["tx_invert"].is<int>()) {
-        int v = doc["tx_invert"].as<int>();
-        if (v == 0 || v == 1) {
-          g_txInvert = v;
-          digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
-          JsonDocument saveDoc;
-          saveDoc["tx_invert"] = g_txInvert;
-          String saveStr;
-          serializeJson(saveDoc, saveStr);
-          File f = LittleFS.open("/settings.json", "w");
-          if (f) { f.print(saveStr); f.close(); }
-          JsonDocument resp;
-          resp["ok"] = true;
-          resp["tx_invert"] = g_txInvert;
-          String out;
-          serializeJson(resp, out);
-          req->send(200, "application/json", out);
-          return;
+      handleJsonRequest(req, data, len, index, total, [req](JsonDocument& doc) {
+        if (doc["tx_invert"].is<int>()) {
+          int v = doc["tx_invert"].as<int>();
+          if (v == 0 || v == 1) {
+            g_txInvert = v;
+            digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
+            JsonDocument saveDoc;
+            saveDoc["tx_invert"] = g_txInvert;
+            String saveStr;
+            serializeJson(saveDoc, saveStr);
+            File f = LittleFS.open("/settings.json", "w");
+            if (f) { f.print(saveStr); f.close(); }
+            JsonDocument resp;
+            resp["ok"] = true;
+            resp["tx_invert"] = g_txInvert;
+            String out;
+            serializeJson(resp, out);
+            req->send(200, "application/json", out);
+            return;
+          }
         }
-      }
-      req->send(400, "application/json", "{\"ok\":false,\"error\":\"tx_invert must be 0 or 1\"}");
+        req->send(400, "application/json", "{\"ok\":false,\"error\":\"tx_invert must be 0 or 1\"}");
+      });
     });
 
   // Debug endpoint: shows GPIO states and config without transmitting
