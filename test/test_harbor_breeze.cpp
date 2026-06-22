@@ -144,30 +144,155 @@ void test_harborBreezeCommandPulses_valid_command() {
     uint16_t out[HB_MAX_PULSES];
     memset(out, 0, sizeof(out));
 
-    // HB_LIGHT_T = "01101010"
-    // HB_PREAMBLE_DIP1 = "00110000111111101"
-    // Combined = "00110000111111101" + "01101010" = "0011000011111110101101010" (25 bits)
-
     int count = harborBreezeCommandPulses("01101010", out, HB_MAX_PULSES);
 
-    // initial (1) + 6 * (25 * 2) + 5 = 1 + 300 + 5 = 306
     ASSERT(count == 306, "Valid command should produce 306 pulses");
 
     ASSERT(out[0] == HB_LONG_US, "init");
-    // First bit of preamble is '0'
     ASSERT(out[1] == HB_SHORT_US, "Preamble bit 0 HIGH");
     ASSERT(out[2] == HB_LONG_US, "Preamble bit 0 LOW");
-
-    // Preamble is 17 bits.
-    // Bit 17 (first bit of func8) is index 17 in 0-indexed string.
-    // Pulse index = 1 + 17*2 = 35.
-    // func8[0] = '0'
     ASSERT(out[35] == HB_SHORT_US, "Func bit 0 HIGH");
     ASSERT(out[36] == HB_LONG_US, "Func bit 0 LOW");
-
-    // func8[1] = '1'
     ASSERT(out[37] == HB_LONG_US, "Func bit 1 HIGH");
     ASSERT(out[38] == HB_SHORT_US, "Func bit 1 LOW");
+}
+
+void test_harborBreezeHubCommandPulses_invalid_inputs() {
+    uint16_t out[1024];
+    const char* cmd[10] = {"SS","SS","SS","SS","SS","SS","SS","SS","SS","SR"};
+
+    ASSERT(harborBreezeHubCommandPulses(NULL, out, 1024) == 0, "Should return 0 for NULL cmd10");
+    ASSERT(harborBreezeHubCommandPulses(cmd, NULL, 1024) == 0, "Should return 0 for NULL out");
+    ASSERT(harborBreezeHubCommandPulses(cmd, out, 599) == 0, "Should return 0 for maxOut < 600");
+}
+
+void test_harborBreezeHubCommandPulses_basic() {
+    uint16_t out[1024];
+    memset(out, 0, sizeof(out));
+    const char* cmd[10] = {"SS", "SL", "LL", "LS", "SR", "SS", "SL", "LL", "LS", "SR"};
+
+    int count = harborBreezeHubCommandPulses(cmd, out, 1024);
+    ASSERT(count == 600, "Total pulses should be 600 (50 * 12)");
+
+    for (int i = 0; i < 15; i++) {
+        ASSERT(out[i*2] == HB_HUB_SHORT_ON, "Remote0 pulse HIGH");
+        ASSERT(out[i*2 + 1] == HB_HUB_LONG_OFF, "Remote0 pulse LOW");
+    }
+
+    ASSERT(out[30] == 400 && out[31] == 500, "Cmd[0] SS");
+    ASSERT(out[32] == 400 && out[33] == 950, "Cmd[1] SL");
+    ASSERT(out[34] == 850 && out[35] == 950, "Cmd[2] LL");
+    ASSERT(out[36] == 850 && out[37] == 500, "Cmd[3] LS");
+    ASSERT(out[38] == 400 && out[39] == 10000, "Cmd[4] SR");
+    ASSERT(out[50] == HB_HUB_SHORT_ON, "Repeat 2 start HIGH");
+    ASSERT(out[51] == HB_HUB_LONG_OFF, "Repeat 2 start LOW (SL)");
+}
+
+static void hubSymbolsToPulses(const char* const symbols[], int count, uint16_t* out, int* idx) {
+    for (int i = 0; i < count; i++) {
+        const char* sym = symbols[i];
+        if (strcmp(sym, "SS") == 0) { out[(*idx)++] = HB_HUB_SHORT_ON; out[(*idx)++] = HB_HUB_SHORT_OFF; }
+        else if (strcmp(sym, "SL") == 0) { out[(*idx)++] = HB_HUB_SHORT_ON; out[(*idx)++] = HB_HUB_LONG_OFF; }
+        else if (strcmp(sym, "LL") == 0) { out[(*idx)++] = HB_HUB_LONG_ON; out[(*idx)++] = HB_HUB_LONG_OFF; }
+        else if (strcmp(sym, "LS") == 0) { out[(*idx)++] = HB_HUB_LONG_ON; out[(*idx)++] = HB_HUB_SHORT_OFF; }
+        else if (strcmp(sym, "SR") == 0) { out[(*idx)++] = HB_HUB_SHORT_ON; out[(*idx)++] = HB_HUB_REST; }
+    }
+}
+
+void test_harborBreezeHubDecodePulses_basic() {
+    uint16_t pulses[100];
+    int idx = 0;
+    const char* remote0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    const char* light_toggle[] = { "SL","SL","SS","LS","LL","SS","LL","SS","LL","SR" };
+
+    hubSymbolsToPulses(remote0, 15, pulses, &idx);
+    hubSymbolsToPulses(light_toggle, 10, pulses, &idx);
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 25, "Should decode 25 symbols");
+    ASSERT(matched_cmd != nullptr, "Should match a command");
+    ASSERT(strcmp(matched_cmd, "light_toggle") == 0, "Should match light_toggle");
+    ASSERT(strstr(symbols_buf, "SL, SL") != nullptr, "Symbols buffer should contain SL");
+    ASSERT(strstr(symbols_buf, "SR") != nullptr, "Symbols buffer should contain SR");
+}
+
+void test_harborBreezeHubDecodePulses_leading_idle() {
+    uint16_t pulses[100];
+    pulses[0] = 6000; // Leading idle > 5000
+    int idx = 1;
+    const char* remote0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    const char* fan_off[] = { "LL","SS","LS","LS","LS","LS","LL","SS","LL","SR" };
+
+    hubSymbolsToPulses(remote0, 15, pulses, &idx);
+    hubSymbolsToPulses(fan_off, 10, pulses, &idx);
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 25, "Should decode 25 symbols even with leading idle");
+    ASSERT(matched_cmd != nullptr, "Should match fan_off");
+    ASSERT(strcmp(matched_cmd, "fan_off") == 0, "Should match fan_off");
+}
+
+void test_harborBreezeHubDecodePulses_variations() {
+    uint16_t pulses[100];
+    int idx = 0;
+    const char* remote0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    const char* fan_speed_1[] = { "LL","SL","SS","LS","LS","LS","LL","SS","LL","SR" };
+
+    hubSymbolsToPulses(remote0, 15, pulses, &idx);
+    hubSymbolsToPulses(fan_speed_1, 10, pulses, &idx);
+
+    // Add variations within tolerance (HUB_TOL = 150)
+    pulses[0] += 100; // SL ON: 400 -> 500
+    pulses[1] -= 100; // SL OFF: 950 -> 850
+    pulses[idx-2] += 100; // SR ON: 400 -> 500
+    pulses[idx-1] += 500; // SR OFF: 10000 -> 10500
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 25, "Should decode with variations within tolerance");
+    ASSERT(matched_cmd != nullptr && strcmp(matched_cmd, "fan_speed_1") == 0, "Should match fan_speed_1");
+
+    // Variations outside tolerance
+    pulses[0] = 400 + 200; // 600 > 400 + 150
+    res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+    ASSERT(res == 0, "Should NOT decode with variations outside tolerance");
+}
+
+void test_harborBreezeHubDecodePulses_invalid() {
+    uint16_t pulses[100];
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+
+    ASSERT(harborBreezeHubDecodePulses(nullptr, 100, symbols_buf, 120, &matched_cmd) == 0, "NULL pulses");
+    ASSERT(harborBreezeHubDecodePulses(pulses, 49, symbols_buf, 120, &matched_cmd) == 0, "Too few pulses");
+    ASSERT(harborBreezeHubDecodePulses(pulses, 100, nullptr, 120, &matched_cmd) == 0, "NULL buffer");
+    ASSERT(harborBreezeHubDecodePulses(pulses, 100, symbols_buf, 79, &matched_cmd) == 0, "Buffer too small");
+}
+
+void test_harborBreezeHubDecodePulses_unknown() {
+    uint16_t pulses[100];
+    int idx = 0;
+    const char* remote0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    const char* unknown_cmd[] = { "SS","SS","SS","SS","SS","SS","SS","SS","SS","SR" };
+
+    hubSymbolsToPulses(remote0, 15, pulses, &idx);
+    hubSymbolsToPulses(unknown_cmd, 10, pulses, &idx);
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 25, "Should decode 25 symbols even if command unknown");
+    ASSERT(matched_cmd == nullptr, "Should NOT match a known command");
+    ASSERT(strstr(symbols_buf, "SS, SS, SS") != nullptr, "Should have SS symbols in buffer");
 }
 
 int main() {
@@ -181,6 +306,15 @@ int main() {
     test_harborBreezeCommandPulses_invalid_inputs();
     test_harborBreezeCommandPulses_invalid_length();
     test_harborBreezeCommandPulses_valid_command();
+
+    test_harborBreezeHubCommandPulses_invalid_inputs();
+    test_harborBreezeHubCommandPulses_basic();
+
+    test_harborBreezeHubDecodePulses_basic();
+    test_harborBreezeHubDecodePulses_leading_idle();
+    test_harborBreezeHubDecodePulses_variations();
+    test_harborBreezeHubDecodePulses_invalid();
+    test_harborBreezeHubDecodePulses_unknown();
 
     printf("All tests passed!\n");
     return 0;
