@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <stdlib.h>
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -162,8 +163,12 @@ struct Command {
 };
 
 static const Command commands[] = {
-  { "light_toggle",    HB_LIGHT_T },
-  { "light_dim",       HB_LIGHT_D },
+  { "delay_2h",        HB_DELAY_2 },
+  { "delay_4h",        HB_DELAY_4 },
+  { "delay_8h",        HB_DELAY_8 },
+  { "delay_off",       HB_DELAY_O },
+  { "fan_direction_summer", HB_FAN_FSD },
+  { "fan_direction_winter", HB_FAN_FWD },
   { "fan_off",         HB_FAN_FST },
   { "fan_speed_1",     HB_FAN_FS1 },
   { "fan_speed_2",     HB_FAN_FS2 },
@@ -171,14 +176,10 @@ static const Command commands[] = {
   { "fan_speed_4",     HB_FAN_FS4 },
   { "fan_speed_5",     HB_FAN_FS5 },
   { "fan_speed_6",     HB_FAN_FS6 },
-  { "fan_direction_summer", HB_FAN_FSD },
-  { "fan_direction_winter", HB_FAN_FWD },
-  { "nature_breeze",   HB_FAN_FSN },
-  { "delay_off",       HB_DELAY_O },
-  { "delay_2h",        HB_DELAY_2 },
-  { "delay_4h",        HB_DELAY_4 },
-  { "delay_8h",        HB_DELAY_8 },
   { "home_shield",     HB_LIGHT_H },
+  { "light_dim",       HB_LIGHT_D },
+  { "light_toggle",    HB_LIGHT_T },
+  { "nature_breeze",   HB_FAN_FSN },
 };
 static const int numCommands = sizeof(commands) / sizeof(commands[0]);
 
@@ -204,6 +205,12 @@ static bool decodePulsesToFunc(const uint16_t* pulses, int len, char* func8) {
   return true;
 }
 
+static int compareCommands(const void* a, const void* b) {
+  const char* cmd = (const char*)a;
+  const Command* c = (const Command*)b;
+  return strcmp(cmd, c->name);
+}
+
 static const char* findNameByFunc(const char* func8) {
   for (int i = 0; i < numCommands; i++)
     if (strcmp(commands[i].func, func8) == 0)
@@ -212,10 +219,10 @@ static const char* findNameByFunc(const char* func8) {
 }
 
 static const char* findFunc(const char* cmd) {
-  for (int i = 0; i < numCommands; i++)
-    if (strcmp(commands[i].name, cmd) == 0)
-      return commands[i].func;
-  return nullptr;
+  const Command* result = (const Command*)bsearch(
+    cmd, commands, numCommands, sizeof(Command), compareCommands
+  );
+  return result ? result->func : nullptr;
 }
 
 // Helper for JSON POST requests: handles chunk aggregation, parsing, and error reporting.
