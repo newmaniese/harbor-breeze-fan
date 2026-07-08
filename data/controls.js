@@ -77,87 +77,90 @@
       .catch(function () {});
   }
 
-  // Light button: tap = toggle, hold = dim (only when light is on).
-  // - dimmingActive: interval callback does nothing after stopDim().
-  // - AbortController: cancel in-flight fetches on release so ESP32 gets fewer requests.
-  // - 600ms interval: fewer commands so less "tail" after release; still smooth for dimming.
-  // - Max dims per hold: safety cap so we never flood even if pointerup never fires.
-  var lightBtn = document.getElementById('btn-light');
-  var dimInterval = null;
-  var dimmingActive = false;
-  var dimAbortController = null;
-  var dimCount = 0;
-  var DIM_INTERVAL_MS = 600;
-  var DIM_MAX_PER_HOLD = 30;
-  var lightPressTimer = null;
-  var lightDidHold = false;
-  if (lightBtn) {
-    function startDim() {
-      if (dimmingActive || !lastLightOn) return;
-      dimmingActive = true;
-      dimCount = 0;
-      dimAbortController = new AbortController();
-      lightBtn.classList.add('light-dimming');
-      sendCommand('light_dim');
-      dimCount++;
-      dimInterval = setInterval(function () {
-        if (!dimmingActive || dimCount >= DIM_MAX_PER_HOLD) return;
-        var ac = dimAbortController;
-        if (!ac) return;
-        fetch('/send-hub?cmd=light_dim', { signal: ac.signal }).catch(function () {});
+  function initLightButton() {
+    // Light button: tap = toggle, hold = dim (only when light is on).
+    // - dimmingActive: interval callback does nothing after stopDim().
+    // - AbortController: cancel in-flight fetches on release so ESP32 gets fewer requests.
+    // - 600ms interval: fewer commands so less "tail" after release; still smooth for dimming.
+    // - Max dims per hold: safety cap so we never flood even if pointerup never fires.
+    var lightBtn = document.getElementById('btn-light');
+    var dimInterval = null;
+    var dimmingActive = false;
+    var dimAbortController = null;
+    var dimCount = 0;
+    var DIM_INTERVAL_MS = 600;
+    var DIM_MAX_PER_HOLD = 30;
+    var lightPressTimer = null;
+    var lightDidHold = false;
+    if (lightBtn) {
+      function startDim() {
+        if (dimmingActive || !lastLightOn) return;
+        dimmingActive = true;
+        dimCount = 0;
+        dimAbortController = new AbortController();
+        lightBtn.classList.add('light-dimming');
+        sendCommand('light_dim');
         dimCount++;
-      }, DIM_INTERVAL_MS);
-    }
-    function stopDim() {
-      dimmingActive = false;
-      if (dimAbortController) {
-        dimAbortController.abort();
-        dimAbortController = null;
+        dimInterval = setInterval(function () {
+          if (!dimmingActive || dimCount >= DIM_MAX_PER_HOLD) return;
+          var ac = dimAbortController;
+          if (!ac) return;
+          fetch('/send-hub?cmd=light_dim', { signal: ac.signal }).catch(function () {});
+          dimCount++;
+        }, DIM_INTERVAL_MS);
       }
-      if (dimInterval) {
-        clearInterval(dimInterval);
-        dimInterval = null;
+      function stopDim() {
+        dimmingActive = false;
+        if (dimAbortController) {
+          dimAbortController.abort();
+          dimAbortController = null;
+        }
+        if (dimInterval) {
+          clearInterval(dimInterval);
+          dimInterval = null;
+        }
+        lightBtn.classList.remove('light-dimming');
       }
-      lightBtn.classList.remove('light-dimming');
+      function onPointerDown(e) {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        lightDidHold = false;
+        lightPressTimer = setTimeout(function () {
+          lightDidHold = true;
+          if (lastLightOn) startDim();
+        }, 400);
+      }
+      function onPointerUp(e) {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        clearTimeout(lightPressTimer);
+        lightPressTimer = null;
+        stopDim();
+        if (!lightDidHold) sendCommand('light_toggle');
+      }
+      function onPointerLeaveOrCancel() {
+        clearTimeout(lightPressTimer);
+        lightPressTimer = null;
+        stopDim();
+      }
+      lightBtn.addEventListener('pointerdown', onPointerDown, { passive: true });
+      lightBtn.addEventListener('pointerup', onPointerUp, { passive: true });
+      lightBtn.addEventListener('pointerleave', onPointerLeaveOrCancel, { passive: true });
+      lightBtn.addEventListener('pointercancel', onPointerLeaveOrCancel, { passive: true });
+      lightBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      lightBtn.addEventListener('touchstart', function (e) { e.preventDefault(); }, { passive: false });
+      lightBtn.addEventListener('touchend', function (e) {
+        e.preventDefault();
+        onPointerLeaveOrCancel();
+      }, { passive: false });
+      lightBtn.addEventListener('touchcancel', function (e) {
+        e.preventDefault();
+        onPointerLeaveOrCancel();
+      }, { passive: false });
+      lightBtn.addEventListener('click', function (e) { e.preventDefault(); });
+      window.addEventListener('blur', onPointerLeaveOrCancel);
+      document.addEventListener('visibilitychange', function () { if (document.hidden) onPointerLeaveOrCancel(); });
     }
-    function onPointerDown(e) {
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-      lightDidHold = false;
-      lightPressTimer = setTimeout(function () {
-        lightDidHold = true;
-        if (lastLightOn) startDim();
-      }, 400);
-    }
-    function onPointerUp(e) {
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-      clearTimeout(lightPressTimer);
-      lightPressTimer = null;
-      stopDim();
-      if (!lightDidHold) sendCommand('light_toggle');
-    }
-    function onPointerLeaveOrCancel() {
-      clearTimeout(lightPressTimer);
-      lightPressTimer = null;
-      stopDim();
-    }
-    lightBtn.addEventListener('pointerdown', onPointerDown, { passive: true });
-    lightBtn.addEventListener('pointerup', onPointerUp, { passive: true });
-    lightBtn.addEventListener('pointerleave', onPointerLeaveOrCancel, { passive: true });
-    lightBtn.addEventListener('pointercancel', onPointerLeaveOrCancel, { passive: true });
-    lightBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
-    lightBtn.addEventListener('touchstart', function (e) { e.preventDefault(); }, { passive: false });
-    lightBtn.addEventListener('touchend', function (e) {
-      e.preventDefault();
-      onPointerLeaveOrCancel();
-    }, { passive: false });
-    lightBtn.addEventListener('touchcancel', function (e) {
-      e.preventDefault();
-      onPointerLeaveOrCancel();
-    }, { passive: false });
-    lightBtn.addEventListener('click', function (e) { e.preventDefault(); });
-    window.addEventListener('blur', onPointerLeaveOrCancel);
-    document.addEventListener('visibilitychange', function () { if (document.hidden) onPointerLeaveOrCancel(); });
   }
+  initLightButton();
 
   // Fan speed slider: 0 = off (left), 1-6 = speed. Send on change (release).
   var fanSlider = document.getElementById('fan-speed-slider');
