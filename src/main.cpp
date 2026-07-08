@@ -146,6 +146,16 @@ static bool homeShieldLearned() {
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
+struct VerifyTxState {
+  bool active = false;
+  AsyncWebServerRequest* req = nullptr;
+  String cmd;
+  int expectedLen = 0;
+  uint16_t expectedPulses[HB_HUB_MAX_PULSES];
+  uint32_t seqBefore = 0;
+  unsigned long waitStartTime = 0;
+} g_verifyTx;
+
 struct Command {
   const char* name;
   const char* func;
@@ -859,6 +869,11 @@ void setupRoutes() {
 
   // Verify TX: send a command, wait for receiver to capture, return expected vs captured for comparison.
   server.on("/verify-tx", HTTP_GET, [](AsyncWebServerRequest* req) {
+    if (g_verifyTx.active) {
+      req->send(429, "application/json", "{\"ok\":false,\"error\":\"Another verify-tx is currently running\"}");
+      return;
+    }
+
     String cmd = req->hasParam("cmd") ? req->getParam("cmd")->value() : "light_toggle";
     static uint16_t expectedPulsesBuf[HB_HUB_MAX_PULSES];
     uint16_t* expectedPulses = expectedPulsesBuf;
@@ -881,37 +896,23 @@ void setupRoutes() {
         return;
       }
     }
-    uint32_t seqBefore = rfCaptureGetLastSeq();
-    sendPulses(expectedPulses, expectedLen);
-    delay(350);
-    for (int i = 0; i < 30; i++) {
-      rfCaptureLoop();
-      delay(10);
-    }
-    uint32_t seqAfter = rfCaptureGetLastSeq();
-    int capturedLen = rfCaptureGetLastLength();
-    uint16_t capturedPulses[RF_CAPTURE_MAX_PULSES];
-    int nCaptured = rfCaptureGetLastPulses(capturedPulses, RF_CAPTURE_MAX_PULSES);
 
-    JsonDocument doc;
-    doc["ok"] = true;
-    doc["cmd"] = cmd;
-    doc["expected_length"] = expectedLen;
-    doc["captured_length"] = nCaptured;
-    doc["seq_before"] = seqBefore;
-    doc["seq_after"] = seqAfter;
-    doc["new_capture_during_test"] = (seqAfter > seqBefore);
-    bool txSeen = (nCaptured >= 20 && nCaptured >= (expectedLen / 2) && nCaptured <= (expectedLen * 2));
-    doc["tx_seen_by_receiver"] = txSeen;
-    JsonArray expArr = doc["expected_sample"].to<JsonArray>();
-    int expSample = (expectedLen > 15) ? 15 : expectedLen;
-    for (int i = 0; i < expSample; i++) expArr.add(expectedPulses[i]);
-    JsonArray capArr = doc["captured_sample"].to<JsonArray>();
-    int capSample = (nCaptured > 15) ? 15 : nCaptured;
-    for (int i = 0; i < capSample; i++) capArr.add(capturedPulses[i]);
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    g_verifyTx.req = req;
+    g_verifyTx.cmd = cmd;
+    g_verifyTx.expectedLen = expectedLen;
+    memcpy(g_verifyTx.expectedPulses, expectedPulses, expectedLen * sizeof(uint16_t));
+    g_verifyTx.seqBefore = rfCaptureGetLastSeq();
+
+    // We handle disconnect to avoid writing to a freed request
+    req->onDisconnect([]() {
+      if (g_verifyTx.active && g_verifyTx.req != nullptr) {
+        g_verifyTx.req = nullptr;
+      }
+    });
+
+    sendPulses(expectedPulses, expectedLen);
+    g_verifyTx.waitStartTime = millis();
+    g_verifyTx.active = true;
   });
 #endif
 
@@ -1057,6 +1058,39 @@ void setup() {
 void loop() {
 #ifndef TRANSCEIVER_ONLY
   rfCaptureLoop();
+
+  if (g_verifyTx.active && millis() - g_verifyTx.waitStartTime >= 650) {
+    if (g_verifyTx.req != nullptr) {
+      uint32_t seqAfter = rfCaptureGetLastSeq();
+      int capturedLen = rfCaptureGetLastLength();
+      uint16_t capturedPulses[RF_CAPTURE_MAX_PULSES];
+      int nCaptured = rfCaptureGetLastPulses(capturedPulses, RF_CAPTURE_MAX_PULSES);
+
+      JsonDocument doc;
+      doc["ok"] = true;
+      doc["cmd"] = g_verifyTx.cmd;
+      doc["expected_length"] = g_verifyTx.expectedLen;
+      doc["captured_length"] = nCaptured;
+      doc["seq_before"] = g_verifyTx.seqBefore;
+      doc["seq_after"] = seqAfter;
+      doc["new_capture_during_test"] = (seqAfter > g_verifyTx.seqBefore);
+      bool txSeen = (nCaptured >= 20 && nCaptured >= (g_verifyTx.expectedLen / 2) && nCaptured <= (g_verifyTx.expectedLen * 2));
+      doc["tx_seen_by_receiver"] = txSeen;
+
+      JsonArray expArr = doc["expected_sample"].to<JsonArray>();
+      int expSample = (g_verifyTx.expectedLen > 15) ? 15 : g_verifyTx.expectedLen;
+      for (int i = 0; i < expSample; i++) expArr.add(g_verifyTx.expectedPulses[i]);
+
+      JsonArray capArr = doc["captured_sample"].to<JsonArray>();
+      int capSample = (nCaptured > 15) ? 15 : nCaptured;
+      for (int i = 0; i < capSample; i++) capArr.add(capturedPulses[i]);
+
+      String out;
+      serializeJson(doc, out);
+      g_verifyTx.req->send(200, "application/json", out);
+    }
+    g_verifyTx.active = false;
+  }
 
   // Broadcast new RF over WebSocket with minimal payload (no pulse array) to reduce allocation and stack.
   if (rfCaptureHasNew()) {
