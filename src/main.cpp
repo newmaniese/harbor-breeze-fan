@@ -371,58 +371,8 @@ static void handleIcon192(AsyncWebServerRequest* req) {
   req->send(resp);
 }
 
-void setup() {
-  Serial.begin(115200);
-  delay(200);
-  printf("[HB] --- Harbor Breeze Fan Control boot ---\n");
-  pinMode(TX_PIN, OUTPUT);
-  digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
 
-  if (!LittleFS.begin(true)) {
-    printf("[HB] LittleFS mount failed\n");
-  } else {
-    File f = LittleFS.open("/settings.json", "r");
-    if (f) {
-      JsonDocument doc;
-      if (deserializeJson(doc, f.readString()) == DeserializationError::Ok) {
-        if (doc["tx_invert"].is<int>()) {
-          int v = doc["tx_invert"].as<int>();
-          if (v == 0 || v == 1) { g_txInvert = v; printf("[HB] settings: tx_invert=%d\n", g_txInvert); }
-        }
-      }
-      f.close();
-    }
-  }
-
-#ifndef TRANSCEIVER_ONLY
-  rfCaptureBegin();
-  printf("[HB] RF receive on GPIO 5 (point remote and press a button, then GET /last-rf)\n");
-#else
-  printf("[HB] Transceiver-only build: no receiver (GPIO 5 unused)\n");
-#endif
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  printf("[HB] Connecting to Wi-Fi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    printf(".");
-  }
-  printf("\n[HB] IP: %s\n", WiFi.localIP().toString().c_str());
-  printf("[HB] http://%s/\n", WiFi.localIP().toString().c_str());
-
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t now = 0;
-  for (int i = 0; i < 20; i++) {
-    delay(500);
-    now = time(nullptr);
-    if (now > 1600000000) break;  // valid time
-  }
-  if (now > 1600000000) printf("[HB] NTP synced\n");
-  else printf("[HB] NTP not synced, delay countdown may be wrong\n");
-
-  stateBegin();
-
+void setupRoutes() {
   server.on(AsyncURIMatcher::exact("/"), HTTP_GET, handleRoot);
   server.on(AsyncURIMatcher::exact("/settings"), HTTP_GET, handleSettings);
   server.on(AsyncURIMatcher::exact("/debug"), HTTP_GET, handleDebug);
@@ -1044,6 +994,61 @@ void setup() {
   server.onNotFound([](AsyncWebServerRequest* req) {
     req->send(404, "text/plain", "Not found");
   });
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  printf("[HB] --- Harbor Breeze Fan Control boot ---\n");
+  pinMode(TX_PIN, OUTPUT);
+  digitalWrite(TX_PIN, g_txInvert ? HIGH : LOW);
+
+  if (!LittleFS.begin(true)) {
+    printf("[HB] LittleFS mount failed\n");
+  } else {
+    File f = LittleFS.open("/settings.json", "r");
+    if (f) {
+      JsonDocument doc;
+      if (deserializeJson(doc, f.readString()) == DeserializationError::Ok) {
+        if (doc["tx_invert"].is<int>()) {
+          int v = doc["tx_invert"].as<int>();
+          if (v == 0 || v == 1) { g_txInvert = v; printf("[HB] settings: tx_invert=%d\n", g_txInvert); }
+        }
+      }
+      f.close();
+    }
+  }
+
+#ifndef TRANSCEIVER_ONLY
+  rfCaptureBegin();
+  printf("[HB] RF receive on GPIO 5 (point remote and press a button, then GET /last-rf)\n");
+#else
+  printf("[HB] Transceiver-only build: no receiver (GPIO 5 unused)\n");
+#endif
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  printf("[HB] Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    printf(".");
+  }
+  printf("\n[HB] IP: %s\n", WiFi.localIP().toString().c_str());
+  printf("[HB] http://%s/\n", WiFi.localIP().toString().c_str());
+
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = 0;
+  for (int i = 0; i < 20; i++) {
+    delay(500);
+    now = time(nullptr);
+    if (now > 1600000000) break;  // valid time
+  }
+  if (now > 1600000000) printf("[HB] NTP synced\n");
+  else printf("[HB] NTP not synced, delay countdown may be wrong\n");
+
+  stateBegin();
+
+  setupRoutes();
 
   server.begin();
   printf("[HB] HTTP server started\n");
