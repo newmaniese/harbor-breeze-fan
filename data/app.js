@@ -1,4 +1,14 @@
 (function () {
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   var statusEl = document.getElementById('status');
   var logEl = document.getElementById('send-log');
   var rfLogEl = document.getElementById('rf-log');
@@ -41,10 +51,10 @@
     var msg = entry.recognized && entry.command
       ? 'Recognized: ' + entry.command
       : (entry.func8 ? 'Unrecognized (func ' + entry.func8 + ')' : 'Unrecognized');
-    line.innerHTML = '<span class="rf-log-ts">' + timeStr() + '</span> ' +
-      '<span class="rf-log-msg">' + msg + '</span> ' +
-      '<span class="rf-log-meta">' + entry.length + ' pulses</span>' +
-      (raw ? ' <span class="rf-log-raw" title="First 20 pulses (µs)">[' + raw + ']</span>' : '');
+    line.innerHTML = '<span class="rf-log-ts">' + escapeHtml(timeStr()) + '</span> ' +
+      '<span class="rf-log-msg">' + escapeHtml(msg) + '</span> ' +
+      '<span class="rf-log-meta">' + escapeHtml(entry.length) + ' pulses</span>' +
+      (raw ? ' <span class="rf-log-raw" title="First 20 pulses (µs)">[' + escapeHtml(raw) + ']</span>' : '');
     rfLogEl.appendChild(line);
     while (rfLogEl.children.length > maxRfLogLines) rfLogEl.removeChild(rfLogEl.firstChild);
     rfLogEl.scrollTop = rfLogEl.scrollHeight;
@@ -148,11 +158,26 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d || !d.commands || !d.commands.length) return;
-        var opts = d.commands.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
         var verifyCmd = document.getElementById('verify-cmd');
         var debugPulsesCmd = document.getElementById('debug-pulses-cmd');
-        if (verifyCmd) verifyCmd.innerHTML = opts;
-        if (debugPulsesCmd) debugPulsesCmd.innerHTML = opts;
+
+        if (verifyCmd) verifyCmd.innerHTML = '';
+        if (debugPulsesCmd) debugPulsesCmd.innerHTML = '';
+
+        d.commands.forEach(function (c) {
+          if (verifyCmd) {
+            var opt1 = document.createElement('option');
+            opt1.value = c;
+            opt1.textContent = c;
+            verifyCmd.appendChild(opt1);
+          }
+          if (debugPulsesCmd) {
+            var opt2 = document.createElement('option');
+            opt2.value = c;
+            opt2.textContent = c;
+            debugPulsesCmd.appendChild(opt2);
+          }
+        });
       })
       .catch(function () {});
   }
@@ -206,11 +231,11 @@
         if (!d) { setResult('verify-tx-result', 'No response', true); return; }
         var seen = d.tx_seen_by_receiver ? 'Yes' : 'No';
         var newCap = d.new_capture_during_test ? 'Yes' : 'No';
-        var html = '<p><strong>TX seen by receiver:</strong> ' + seen + '</p>' +
-          '<p>Expected length: ' + (d.expected_length || 0) + ', Captured length: ' + (d.captured_length || 0) + '</p>' +
-          '<p>Seq before: ' + (d.seq_before ?? '') + ', Seq after: ' + (d.seq_after ?? '') + ', New capture during test: ' + newCap + '</p>';
-        if (d.expected_sample && d.expected_sample.length) html += '<p class="debug-sample">Expected sample (µs): ' + d.expected_sample.slice(0, 10).join(', ') + ' …</p>';
-        if (d.captured_sample && d.captured_sample.length) html += '<p class="debug-sample">Captured sample (µs): ' + d.captured_sample.slice(0, 10).join(', ') + ' …</p>';
+        var html = '<p><strong>TX seen by receiver:</strong> ' + escapeHtml(seen) + '</p>' +
+          '<p>Expected length: ' + escapeHtml(d.expected_length || 0) + ', Captured length: ' + escapeHtml(d.captured_length || 0) + '</p>' +
+          '<p>Seq before: ' + escapeHtml(d.seq_before ?? '') + ', Seq after: ' + escapeHtml(d.seq_after ?? '') + ', New capture during test: ' + escapeHtml(newCap) + '</p>';
+        if (d.expected_sample && d.expected_sample.length) html += '<p class="debug-sample">Expected sample (µs): ' + escapeHtml(d.expected_sample.slice(0, 10).join(', ')) + ' …</p>';
+        if (d.captured_sample && d.captured_sample.length) html += '<p class="debug-sample">Captured sample (µs): ' + escapeHtml(d.captured_sample.slice(0, 10).join(', ')) + ' …</p>';
         if (d.captured_sample && d.captured_sample.length && d.captured_sample[0] > 2000) {
           html += '<p class="debug-hint">Captured values are in ms range (e.g. 5000+ µs). Our TX uses ~380/770 µs. Receiver may not be seeing the transmitter (check wiring, antenna, power) or may output different timing.</p>';
         }
@@ -238,10 +263,10 @@
       var skip = (capPulses[0] >= 60000) ? 1 : 0;
       var capShow = capPulses.slice(skip, skip + 40);
       var expShow = expPulses.slice(0, 40);
-      var html = '<p><strong>Remote capture</strong> length: ' + capLen + (skip ? ' (skipped first value ' + capPulses[0] + ' as receiver artifact)' : '') + '</p>';
-      html += '<p class="debug-sample"><strong>Captured (µs):</strong> ' + capShow.join(', ') + (capPulses.length > skip + 40 ? ' …' : '') + '</p>';
-      html += '<p><strong>Our expected (light_toggle)</strong> length: ' + expLen + '</p>';
-      html += '<p class="debug-sample"><strong>Expected (µs):</strong> ' + expShow.join(', ') + (expPulses.length > 40 ? ' …' : '') + '</p>';
+      var html = '<p><strong>Remote capture</strong> length: ' + escapeHtml(capLen) + (skip ? ' (skipped first value ' + escapeHtml(capPulses[0]) + ' as receiver artifact)' : '') + '</p>';
+      html += '<p class="debug-sample"><strong>Captured (µs):</strong> ' + escapeHtml(capShow.join(', ')) + (capPulses.length > skip + 40 ? ' …' : '') + '</p>';
+      html += '<p><strong>Our expected (light_toggle)</strong> length: ' + escapeHtml(expLen) + '</p>';
+      html += '<p class="debug-sample"><strong>Expected (µs):</strong> ' + escapeHtml(expShow.join(', ')) + (expPulses.length > 40 ? ' …' : '') + '</p>';
       html += '<p class="debug-hint">Compare the two rows: similar values (~380 and ~770, or ~430 and ~940) mean the remote matches our protocol. If the remote uses different timing, we can adjust short/long in firmware to match.</p>';
       setResult('compare-remote-result', html);
     }).catch(function () {
@@ -257,8 +282,8 @@
         if (!d) { setResult('last-rf-result', 'No response', true); return; }
         var len = d.length || 0;
         var pulses = d.pulses || [];
-        var html = '<p>Length: ' + len + ' pulses</p>';
-        if (pulses.length) html += '<p class="debug-sample">Sample: ' + pulses.slice(0, 15).join(', ') + (pulses.length > 15 ? ' …' : '') + '</p>';
+        var html = '<p>Length: ' + escapeHtml(len) + ' pulses</p>';
+        if (pulses.length) html += '<p class="debug-sample">Sample: ' + escapeHtml(pulses.slice(0, 15).join(', ')) + (pulses.length > 15 ? ' …' : '') + '</p>';
         setResult('last-rf-result', len ? html : '<p>No capture yet. Use the remote or run Verify TX.</p>');
       })
       .catch(function () { setResult('last-rf-result', 'Request failed', true); });
@@ -273,8 +298,8 @@
         if (!d) { setResult('debug-pulses-result', 'No response', true); return; }
         var len = d.length || 0;
         var pulses = d.pulses || [];
-        var html = '<p>Command: ' + (d.cmd || cmd) + ', length: ' + len + ' (no transmit)</p>';
-        if (pulses.length) html += '<p class="debug-sample">Sample: ' + pulses.slice(0, 15).join(', ') + (pulses.length > 15 ? ' …' : '') + '</p>';
+        var html = '<p>Command: ' + escapeHtml(d.cmd || cmd) + ', length: ' + escapeHtml(len) + ' (no transmit)</p>';
+        if (pulses.length) html += '<p class="debug-sample">Sample: ' + escapeHtml(pulses.slice(0, 15).join(', ')) + (pulses.length > 15 ? ' …' : '') + '</p>';
         setResult('debug-pulses-result', html);
       })
       .catch(function () { setResult('debug-pulses-result', 'Request failed', true); });
@@ -286,8 +311,8 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d) { setResult('debug-gpio-result', 'No response', true); return; }
-        var html = '<p>TX pin: ' + (d.tx_pin ?? '') + ', TX invert: ' + (d.tx_invert ?? '') + ', RX pin: ' + (d.rx_pin ?? '') + '</p>' +
-          '<p>Short µs: ' + (d.short_us ?? '') + ', Long µs: ' + (d.long_us ?? '') + ', Gap ms: ' + (d.gap_ms ?? '') + ', Repeats: ' + (d.repeats ?? '') + '</p>';
+        var html = '<p>TX pin: ' + escapeHtml(d.tx_pin ?? '') + ', TX invert: ' + escapeHtml(d.tx_invert ?? '') + ', RX pin: ' + escapeHtml(d.rx_pin ?? '') + '</p>' +
+          '<p>Short µs: ' + escapeHtml(d.short_us ?? '') + ', Long µs: ' + escapeHtml(d.long_us ?? '') + ', Gap ms: ' + escapeHtml(d.gap_ms ?? '') + ', Repeats: ' + escapeHtml(d.repeats ?? '') + '</p>';
         setResult('debug-gpio-result', html);
       })
       .catch(function () { setResult('debug-gpio-result', 'Request failed', true); });
