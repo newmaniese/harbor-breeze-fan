@@ -188,6 +188,36 @@ void test_harborBreezeHubCommandPulses_basic() {
     ASSERT(out[51] == HB_HUB_LONG_OFF, "Repeat 2 start LOW (SL)");
 }
 
+void test_harborBreezeHubCommandPulses_full_sequence() {
+    uint16_t out[1024];
+    memset(out, 0, sizeof(out));
+    const char* cmd[10] = {"SS", "SL", "LL", "LS", "SR", "SS", "SL", "LL", "LS", "SR"};
+
+    int count = harborBreezeHubCommandPulses(cmd, out, 1024);
+    ASSERT(count == 600, "Total pulses should be 600 (50 * 12)");
+
+    for (int r = 0; r < 12; r++) {
+        int base_idx = r * 50;
+
+        for (int i = 0; i < 15; i++) {
+            ASSERT(out[base_idx + i*2] == HB_HUB_SHORT_ON, "Remote0 pulse HIGH in repeat");
+            ASSERT(out[base_idx + i*2 + 1] == HB_HUB_LONG_OFF, "Remote0 pulse LOW in repeat");
+        }
+
+        int cmd_base = base_idx + 30;
+        ASSERT(out[cmd_base + 0] == HB_HUB_SHORT_ON && out[cmd_base + 1] == HB_HUB_SHORT_OFF, "Cmd[0] SS in repeat");
+        ASSERT(out[cmd_base + 2] == HB_HUB_SHORT_ON && out[cmd_base + 3] == HB_HUB_LONG_OFF, "Cmd[1] SL in repeat");
+        ASSERT(out[cmd_base + 4] == HB_HUB_LONG_ON && out[cmd_base + 5] == HB_HUB_LONG_OFF, "Cmd[2] LL in repeat");
+        ASSERT(out[cmd_base + 6] == HB_HUB_LONG_ON && out[cmd_base + 7] == HB_HUB_SHORT_OFF, "Cmd[3] LS in repeat");
+        ASSERT(out[cmd_base + 8] == HB_HUB_SHORT_ON && out[cmd_base + 9] == HB_HUB_REST, "Cmd[4] SR in repeat");
+        ASSERT(out[cmd_base + 10] == HB_HUB_SHORT_ON && out[cmd_base + 11] == HB_HUB_SHORT_OFF, "Cmd[5] SS in repeat");
+        ASSERT(out[cmd_base + 12] == HB_HUB_SHORT_ON && out[cmd_base + 13] == HB_HUB_LONG_OFF, "Cmd[6] SL in repeat");
+        ASSERT(out[cmd_base + 14] == HB_HUB_LONG_ON && out[cmd_base + 15] == HB_HUB_LONG_OFF, "Cmd[7] LL in repeat");
+        ASSERT(out[cmd_base + 16] == HB_HUB_LONG_ON && out[cmd_base + 17] == HB_HUB_SHORT_OFF, "Cmd[8] LS in repeat");
+        ASSERT(out[cmd_base + 18] == HB_HUB_SHORT_ON && out[cmd_base + 19] == HB_HUB_REST, "Cmd[9] SR in repeat");
+    }
+}
+
 static void hubSymbolsToPulses(const char* const symbols[], int count, uint16_t* out, int* idx) {
     for (int i = 0; i < count; i++) {
         const char* sym = symbols[i];
@@ -309,6 +339,7 @@ int main() {
 
     test_harborBreezeHubCommandPulses_invalid_inputs();
     test_harborBreezeHubCommandPulses_basic();
+    test_harborBreezeHubCommandPulses_full_sequence();
 
     test_harborBreezeHubDecodePulses_basic();
     test_harborBreezeHubDecodePulses_leading_idle();
