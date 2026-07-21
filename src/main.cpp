@@ -280,10 +280,9 @@ static void handleLastRf(AsyncWebServerRequest* req) {
   JsonDocument doc;
   doc["seq"] = rfCaptureGetLastSeq();
   doc["length"] = rfCaptureGetLastLength();
-  JsonArray arr = doc["pulses"].to<JsonArray>();
   uint16_t pulses[RF_CAPTURE_MAX_PULSES];
   int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
-  for (int i = 0; i < n; i++) arr.add(pulses[i]);
+  copyArray(pulses, n, doc["pulses"].to<JsonArray>());
   String out;
   serializeJson(doc, out);
   req->send(200, "application/json", out);
@@ -306,9 +305,8 @@ static void handleLastRfEvent(AsyncWebServerRequest* req) {
   doc["event"] = "rf";
   doc["seq"] = rfCaptureGetLastSeq();
   doc["length"] = len;
-  JsonArray arr = doc["pulses"].to<JsonArray>();
   int sample = (len > 20) ? 20 : len;
-  for (int i = 0; i < sample; i++) arr.add(pulses[i]);
+  copyArray(pulses, sample, doc["pulses"].to<JsonArray>());
   doc["recognized"] = (name != nullptr);
   if (name) doc["command"] = name;
   if (recognized && !name) doc["func8"] = func8;
@@ -808,8 +806,7 @@ void setupRoutes() {
     JsonDocument doc;
     doc["cmd"] = cmd;
     doc["length"] = n;
-    JsonArray arr = doc["pulses"].to<JsonArray>();
-    for (int i = 0; i < n; i++) arr.add(pulses[i]);
+    copyArray(pulses, n, doc["pulses"].to<JsonArray>());
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -841,8 +838,7 @@ void setupRoutes() {
     doc["cmd"] = cmd;
     doc["protocol"] = "hub";
     doc["length"] = n;
-    JsonArray arr = doc["pulses"].to<JsonArray>();
-    for (int i = 0; i < n; i++) arr.add(pulses[i]);
+    copyArray(pulses, n, doc["pulses"].to<JsonArray>());
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
