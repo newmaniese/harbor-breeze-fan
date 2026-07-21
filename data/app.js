@@ -89,12 +89,12 @@
       });
   }
 
-  var buttons = document.querySelectorAll('[data-cmd]');
-  buttons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var cmd = this.getAttribute('data-cmd');
+  document.body.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-cmd]');
+    if (btn) {
+      var cmd = btn.getAttribute('data-cmd');
       if (cmd) sendCommand(cmd);
-    });
+    }
   });
 
   (function initRfLive() {
