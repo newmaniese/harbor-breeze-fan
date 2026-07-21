@@ -42,6 +42,40 @@ static const uint16_t HOME_SHIELD_GAP_US = 8000;
 static uint16_t s_homeShieldFrame[HOME_SHIELD_MAX_PULSES];
 static int s_homeShieldLen = 0;
 
+// Fast integer to string serialization for JSON array to bypass ArduinoJson add() overhead
+static String buildJsonArrayString(const uint16_t* arr, int n) {
+  if (n <= 0) return String("[]");
+  size_t maxLen = 2 + (size_t)n * 6;
+  char* buf = (char*)malloc(maxLen + 1);
+  if (!buf) return String("[]");
+  char* p = buf;
+  *p++ = '[';
+  for (int i = 0; i < n; i++) {
+    if (i > 0) *p++ = ',';
+    uint16_t val = arr[i];
+    if (val == 0) {
+      *p++ = '0';
+    } else {
+      char* start = p;
+      while (val > 0) {
+        *p++ = '0' + (val % 10);
+        val /= 10;
+      }
+      char* end = p - 1;
+      while (start < end) {
+        char tmp = *start;
+        *start++ = *end;
+        *end-- = tmp;
+      }
+    }
+  }
+  *p++ = ']';
+  *p = '\0';
+  String out(buf);
+  free(buf);
+  return out;
+}
+
 static void stateBegin() {
   statePrefs.begin(STATE_NAMESPACE, false);
   // Load learned Home Shield from NVS into RAM so it's available without read-after-write issues
@@ -280,10 +314,9 @@ static void handleLastRf(AsyncWebServerRequest* req) {
   JsonDocument doc;
   doc["seq"] = rfCaptureGetLastSeq();
   doc["length"] = rfCaptureGetLastLength();
-  JsonArray arr = doc["pulses"].to<JsonArray>();
   uint16_t pulses[RF_CAPTURE_MAX_PULSES];
   int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
-  for (int i = 0; i < n; i++) arr.add(pulses[i]);
+  doc["pulses"] = serialized(buildJsonArrayString(pulses, n));
   String out;
   serializeJson(doc, out);
   req->send(200, "application/json", out);
@@ -306,9 +339,8 @@ static void handleLastRfEvent(AsyncWebServerRequest* req) {
   doc["event"] = "rf";
   doc["seq"] = rfCaptureGetLastSeq();
   doc["length"] = len;
-  JsonArray arr = doc["pulses"].to<JsonArray>();
   int sample = (len > 20) ? 20 : len;
-  for (int i = 0; i < sample; i++) arr.add(pulses[i]);
+  doc["pulses"] = serialized(buildJsonArrayString(pulses, sample));
   doc["recognized"] = (name != nullptr);
   if (name) doc["command"] = name;
   if (recognized && !name) doc["func8"] = func8;
@@ -491,8 +523,7 @@ void setupRoutes() {
     JsonDocument doc;
     doc["learned"] = true;
     doc["frame_length"] = n;
-    JsonArray arr = doc["frame"].to<JsonArray>();
-    for (int i = 0; i < n; i++) arr.add(s_homeShieldFrame[i]);
+    doc["frame"] = serialized(buildJsonArrayString(s_homeShieldFrame, n));
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -808,8 +839,7 @@ void setupRoutes() {
     JsonDocument doc;
     doc["cmd"] = cmd;
     doc["length"] = n;
-    JsonArray arr = doc["pulses"].to<JsonArray>();
-    for (int i = 0; i < n; i++) arr.add(pulses[i]);
+    doc["pulses"] = serialized(buildJsonArrayString(pulses, n));
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -841,8 +871,7 @@ void setupRoutes() {
     doc["cmd"] = cmd;
     doc["protocol"] = "hub";
     doc["length"] = n;
-    JsonArray arr = doc["pulses"].to<JsonArray>();
-    for (int i = 0; i < n; i++) arr.add(pulses[i]);
+    doc["pulses"] = serialized(buildJsonArrayString(pulses, n));
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -1084,13 +1113,11 @@ void loop() {
       bool txSeen = (nCaptured >= 20 && nCaptured >= (g_verifyTx.expectedLen / 2) && nCaptured <= (g_verifyTx.expectedLen * 2));
       doc["tx_seen_by_receiver"] = txSeen;
 
-      JsonArray expArr = doc["expected_sample"].to<JsonArray>();
       int expSample = (g_verifyTx.expectedLen > 15) ? 15 : g_verifyTx.expectedLen;
-      for (int i = 0; i < expSample; i++) expArr.add(g_verifyTx.expectedPulses[i]);
+      doc["expected_sample"] = serialized(buildJsonArrayString(g_verifyTx.expectedPulses, expSample));
 
-      JsonArray capArr = doc["captured_sample"].to<JsonArray>();
       int capSample = (nCaptured > 15) ? 15 : nCaptured;
-      for (int i = 0; i < capSample; i++) capArr.add(capturedPulses[i]);
+      doc["captured_sample"] = serialized(buildJsonArrayString(capturedPulses, capSample));
 
       String out;
       serializeJson(doc, out);
