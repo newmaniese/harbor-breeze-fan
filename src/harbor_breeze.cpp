@@ -148,13 +148,23 @@ int harborBreezeHubDecodePulses(const uint16_t* pulses, int len, char* symbols_b
       if (!hubPairToSymbol(on_u, off_u, syms[i])) break;
     }
     if (i < 25) continue;
-    size_t pos = 0;
-    for (int k = 0; k < 25 && pos + 4 <= buf_sz; k++) {
-      if (k) { symbols_buf[pos++] = ','; symbols_buf[pos++] = ' '; }
-      symbols_buf[pos++] = syms[k][0];
-      symbols_buf[pos++] = syms[k][1];
+    if (buf_sz >= 99) {
+      char* p = symbols_buf;
+      for (int k = 0; k < 25; k++) {
+        if (k) { *p++ = ','; *p++ = ' '; }
+        *p++ = syms[k][0];
+        *p++ = syms[k][1];
+      }
+      *p = '\0';
+    } else {
+      size_t pos = 0;
+      for (int k = 0; k < 25 && pos + 4 <= buf_sz; k++) {
+        if (k) { symbols_buf[pos++] = ','; symbols_buf[pos++] = ' '; }
+        symbols_buf[pos++] = syms[k][0];
+        symbols_buf[pos++] = syms[k][1];
+      }
+      symbols_buf[pos] = '\0';
     }
-    symbols_buf[pos] = '\0';
     for (int c = 0; c < HUB_CMD_COUNT && matched_cmd; c++) {
       bool match = true;
       for (int j = 0; j < 10 && match; j++)
