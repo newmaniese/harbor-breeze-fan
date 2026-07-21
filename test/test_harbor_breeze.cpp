@@ -325,6 +325,63 @@ void test_harborBreezeHubDecodePulses_unknown() {
     ASSERT(strstr(symbols_buf, "SS, SS, SS") != nullptr, "Should have SS symbols in buffer");
 }
 
+
+void test_harborBreezeHubDecodePulses_all_symbols() {
+    uint16_t pulses[100];
+    int idx = 0;
+    // We want to test symbols: LL, LS, SL, SS, SR
+    // Let's create a custom sequence that has all of them.
+    // And see if it decodes properly.
+    const char* mixed_symbols[] = {
+        "LL", "LS", "SL", "SS", "SR", // 5
+        "LL", "LS", "SL", "SS", "SR", // 10
+        "LL", "LS", "SL", "SS", "SR", // 15
+        "LL", "LS", "SL", "SS", "SR", // 20
+        "LL", "LS", "SL", "SS", "SR"  // 25
+    };
+    hubSymbolsToPulses(mixed_symbols, 25, pulses, &idx);
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 25, "Should decode all symbols correctly");
+    ASSERT(strstr(symbols_buf, "L") != nullptr, "Buffer should have L");
+    ASSERT(strstr(symbols_buf, "S") != nullptr, "Buffer should have S");
+}
+
+void test_harborBreezeHubDecodePulses_not_enough_symbols() {
+    uint16_t pulses[100];
+    int idx = 0;
+    const char* partial[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    hubSymbolsToPulses(partial, 15, pulses, &idx);
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 0, "Should NOT decode incomplete symbols");
+}
+
+void test_harborBreezeHubDecodePulses_invalid_symbol() {
+    uint16_t pulses[100];
+    int idx = 0;
+    const char* remote0[] = { "SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL","SL" };
+    hubSymbolsToPulses(remote0, 15, pulses, &idx);
+
+    // Add 10 invalid pulses
+    for (int i=0; i<10; i++) {
+        pulses[idx++] = 10;
+        pulses[idx++] = 10;
+    }
+
+    char symbols_buf[120];
+    const char* matched_cmd = nullptr;
+    int res = harborBreezeHubDecodePulses(pulses, idx, symbols_buf, sizeof(symbols_buf), &matched_cmd);
+
+    ASSERT(res == 0, "Should NOT decode invalid symbols");
+}
+
 int main() {
     test_harborBreezeBuildPulses_invalid_inputs();
     test_harborBreezeBuildPulses_basic_timing();
@@ -346,6 +403,10 @@ int main() {
     test_harborBreezeHubDecodePulses_variations();
     test_harborBreezeHubDecodePulses_invalid();
     test_harborBreezeHubDecodePulses_unknown();
+    test_harborBreezeHubDecodePulses_all_symbols();
+    test_harborBreezeHubDecodePulses_not_enough_symbols();
+    test_harborBreezeHubDecodePulses_invalid_symbol();
+
 
     printf("All tests passed!\n");
     return 0;
