@@ -284,9 +284,9 @@ static void handleLastRf(AsyncWebServerRequest* req) {
   uint16_t pulses[RF_CAPTURE_MAX_PULSES];
   int n = rfCaptureGetLastPulses(pulses, RF_CAPTURE_MAX_PULSES);
   for (int i = 0; i < n; i++) arr.add(pulses[i]);
-  String out;
-  serializeJson(doc, out);
-  req->send(200, "application/json", out);
+  AsyncResponseStream* response = req->beginResponseStream("application/json");
+  serializeJson(doc, *response);
+  req->send(response);
 }
 
 // Polling endpoint for RF log: same shape as former WebSocket message (event, seq, length, pulses, recognized, command).
@@ -312,9 +312,9 @@ static void handleLastRfEvent(AsyncWebServerRequest* req) {
   doc["recognized"] = (name != nullptr);
   if (name) doc["command"] = name;
   if (recognized && !name) doc["func8"] = func8;
-  String out;
-  serializeJson(doc, out);
-  req->send(200, "application/json", out);
+  AsyncResponseStream* response = req->beginResponseStream("application/json");
+  serializeJson(doc, *response);
+  req->send(response);
 }
 #endif
 
@@ -411,9 +411,9 @@ void setupRoutes() {
 #else
     doc["transceiver_only"] = false;
 #endif
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+AsyncResponseStream* response = req->beginResponseStream("application/json");
+serializeJson(doc, *response);
+req->send(response);
   });
 
   // Hub protocol: same as github.com/enlilodisho/harbor-breeze-hub (400/500/850/950 µs, 12 repeats, no gap).
@@ -493,9 +493,9 @@ void setupRoutes() {
     doc["frame_length"] = n;
     JsonArray arr = doc["frame"].to<JsonArray>();
     for (int i = 0; i < n; i++) arr.add(s_homeShieldFrame[i]);
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   // Decode the learned Home Shield frame to hub symbols and return the 10 command symbols (for pasting into HUB_HOME_SHIELD in harbor_breeze.cpp). GET /learned-home-shield-symbols
@@ -506,18 +506,18 @@ void setupRoutes() {
     if (n < HOME_SHIELD_MIN_PULSES || n > HOME_SHIELD_MAX_PULSES) {
       doc["ok"] = false;
       doc["error"] = "No Home Shield frame learned yet.";
-      String out;
-      serializeJson(doc, out);
-      req->send(200, "application/json", out);
+      AsyncResponseStream* response = req->beginResponseStream("application/json");
+      serializeJson(doc, *response);
+      req->send(response);
       return;
     }
     if (n < 50) {
       doc["ok"] = false;
       doc["error"] = "Stored frame has " + String(n) + " pulses; hub decode needs 50. Re-learn by pressing Home Shield on remote, then Learn from last RF.";
       doc["frame_length"] = n;
-      String out;
-      serializeJson(doc, out);
-      req->send(200, "application/json", out);
+      AsyncResponseStream* response = req->beginResponseStream("application/json");
+      serializeJson(doc, *response);
+      req->send(response);
       return;
     }
     char symbols_buf[120];
@@ -547,9 +547,9 @@ void setupRoutes() {
     } else {
       doc["error"] = "Stored frame does not decode as hub protocol (expected 400/500/850/950 µs pairs).";
     }
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
 #ifndef TRANSCEIVER_ONLY
@@ -621,9 +621,9 @@ void setupRoutes() {
     doc["delay_active"] = remaining > 0;
     doc["delay_remaining_sec"] = remaining;
     doc["home_shield_learned"] = homeShieldLearned();
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   server.on("/api/state", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
@@ -698,9 +698,9 @@ void setupRoutes() {
     JsonArray arr = doc["commands"].to<JsonArray>();
     for (int i = 0; i < numCommands; i++)
       arr.add(commands[i].name);
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+      AsyncResponseStream* response = req->beginResponseStream("application/json");
+      serializeJson(doc, *response);
+      req->send(response);
   });
 
 #ifndef TRANSCEIVER_ONLY
@@ -722,9 +722,9 @@ void setupRoutes() {
     JsonDocument doc;
     doc["ok"] = true;
     doc["replayed_pulses"] = n;
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 #endif
 
@@ -749,9 +749,9 @@ void setupRoutes() {
     doc["full_code"] = code;
     doc["short_us"] = HB_SHORT_US;
     doc["long_us"] = HB_LONG_US;
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   // Debug: send raw pulses from JSON array - POST body: {"pulses": [940, 430, 940, 430, ...]}
@@ -775,9 +775,9 @@ void setupRoutes() {
         JsonDocument resp;
         resp["ok"] = true;
         resp["sent_pulses"] = n;
-        String out;
-        serializeJson(resp, out);
-        req->send(200, "application/json", out);
+        AsyncResponseStream* response = req->beginResponseStream("application/json");
+        serializeJson(resp, *response);
+        req->send(response);
       });
     });
 
@@ -810,9 +810,9 @@ void setupRoutes() {
     doc["length"] = n;
     JsonArray arr = doc["pulses"].to<JsonArray>();
     for (int i = 0; i < n; i++) arr.add(pulses[i]);
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   // Debug: hub expected pulses (no TX). Same shape as /debug-pulses but for hub protocol.
@@ -843,9 +843,9 @@ void setupRoutes() {
     doc["length"] = n;
     JsonArray arr = doc["pulses"].to<JsonArray>();
     for (int i = 0; i < n; i++) arr.add(pulses[i]);
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
 #ifndef TRANSCEIVER_ONLY
@@ -869,9 +869,9 @@ void setupRoutes() {
     } else {
       doc["error"] = "Capture does not look like hub protocol (expected 400/500/850/950 µs pairs). Try legacy compare.";
     }
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   // Verify TX: send a command, wait for receiver to capture, return expected vs captured for comparison.
@@ -926,9 +926,9 @@ void setupRoutes() {
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
     JsonDocument doc;
     doc["tx_invert"] = g_txInvert;
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   server.on("/settings", HTTP_POST, [](AsyncWebServerRequest* req) {}, nullptr,
@@ -948,9 +948,9 @@ void setupRoutes() {
             JsonDocument resp;
             resp["ok"] = true;
             resp["tx_invert"] = g_txInvert;
-            String out;
-            serializeJson(resp, out);
-            req->send(200, "application/json", out);
+            AsyncResponseStream* response = req->beginResponseStream("application/json");
+            serializeJson(resp, *response);
+            req->send(response);
             return;
           }
         }
@@ -973,9 +973,9 @@ void setupRoutes() {
     doc["gap_ms"] = HB_GAP_MS;
     doc["repeats"] = HB_REPEATS;
     doc["preamble"] = HB_PREAMBLE_DIP1;
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   // Debug endpoint: toggle TX pin manually to test GPIO electrical connection
@@ -994,9 +994,9 @@ void setupRoutes() {
     doc["tx_pin"] = TX_PIN;
     doc["set_to"] = state;
     doc["readback"] = readBack;
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    AsyncResponseStream* response = req->beginResponseStream("application/json");
+    serializeJson(doc, *response);
+    req->send(response);
   });
 
   server.onNotFound([](AsyncWebServerRequest* req) {
@@ -1092,9 +1092,9 @@ void loop() {
       int capSample = (nCaptured > 15) ? 15 : nCaptured;
       for (int i = 0; i < capSample; i++) capArr.add(capturedPulses[i]);
 
-      String out;
-      serializeJson(doc, out);
-      g_verifyTx.req->send(200, "application/json", out);
+      AsyncResponseStream* response = g_verifyTx.req->beginResponseStream("application/json");
+      serializeJson(doc, *response);
+      g_verifyTx.req->send(response);
     }
     g_verifyTx.active = false;
   }
